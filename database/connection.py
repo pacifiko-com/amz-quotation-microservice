@@ -1,46 +1,122 @@
-"""MySQL connection factory for AWS Lambda warm starts."""
+"""Global MySQL connections reused across AWS Lambda invocations."""
 
 from __future__ import annotations
-
-from typing import Optional
 
 import pymysql
 from pymysql.connections import Connection
 from pymysql.cursors import DictCursor
 
-from config.settings import get_settings
+from config.settings import get_database_settings, get_settings
 from Utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-_connection: Optional[Connection] = None
+# Module-level cache lives outside lambda_handler. Warm execution environments
+# keep these sockets and skip open/close on every invocation.
+_connections: dict[str, Connection] = {}
 
 
-def get_connection() -> Connection:
-    """Return a reused MySQL connection with dictionary cursors.
+def get_connection(country: str) -> Connection:
+    """Return the process-wide MySQL connection configured for a country.
 
-    The connection is stored at module level so warm Lambda invocations
-    skip the TCP handshake. A new one is opened if the previous is closed.
+    Connections are cached independently so one warm Lambda can serve both
+    GT and CR without opening a new socket per query or per request.
+
+    Args:
+        country: Request country used to select ``DB_GT_*`` or ``DB_CR_*``.
 
     Returns:
-        Connection: Live pymysql connection. Do not close it after each
-            query; use ``close_connection`` only on shutdown.
+        Connection: Live pymysql connection for the selected country.
 
     Raises:
         pymysql.Error: If the database cannot be reached with current settings.
+        ValueError: If the country configuration is missing.
     """
-    global _connection
+    normalized = country.strip().upper()
+    connection = _connections.get(normalized)
+    if connection is not None and connection.open:
+        return connection
+    return _open_connection(normalized)
 
-    if _connection is not None and _connection.open:
+
+def ensure_connection(country: str) -> Connection:
+    """Reuse the global connection after a single liveness check.
+
+    Call this once per invocation after the country is known. Idle MySQL
+    servers may drop the socket while the Lambda container stays warm.
+
+    Args:
+        country: Request country used to select the cached connection.
+
+    Returns:
+        Connection: Live pymysql connection for the selected country.
+    """
+    normalized = country.strip().upper()
+    connection = get_connection(normalized)
+    try:
+        connection.ping(reconnect=True)
+        return connection
+    except pymysql.Error:
+        logger.warning(
+            "Stale MySQL connection detected for %s. Reconnecting.",
+            normalized,
+        )
+        _connections.pop(normalized, None)
+        return _open_connection(normalized)
+
+
+def warm_connections() -> None:
+    """Open global connections during container init, not inside the handler.
+
+    Failures are logged and ignored so a missing country database does not
+    block Lambda initialization for the other country.
+    """
+    for country in get_settings().databases:
         try:
-            _connection.ping(reconnect=True)
-            return _connection
-        except pymysql.Error:
-            logger.warning("Stale MySQL connection detected. Reconnecting.")
-            _connection = None
+            get_connection(country)
+        except Exception:
+            logger.warning(
+                "Could not warm the %s MySQL connection during init.",
+                country,
+                exc_info=True,
+            )
 
-    settings = get_settings()
-    _connection = pymysql.connect(
+
+def close_connection(country: str | None = None) -> None:
+    """Close one country connection or every cached connection.
+
+    Args:
+        country: Optional country to close. ``None`` closes GT and CR.
+
+    Returns:
+        None: A later request opens the required connection again.
+    """
+    countries = [country.strip().upper()] if country else list(_connections)
+    for country_code in countries:
+        connection = _connections.pop(country_code, None)
+        if connection is None:
+            continue
+        try:
+            connection.close()
+        except pymysql.Error:
+            logger.warning(
+                "Error while closing %s MySQL connection.",
+                country_code,
+                exc_info=True,
+            )
+
+
+def _open_connection(country: str) -> Connection:
+    """Create and cache a new MySQL connection for one country.
+
+    Args:
+        country: Normalized country code.
+
+    Returns:
+        Connection: Newly opened pymysql connection.
+    """
+    settings = get_database_settings(country)
+    connection = pymysql.connect(
         host=settings.db_host,
         port=settings.db_port,
         user=settings.db_user,
@@ -52,25 +128,11 @@ def get_connection() -> Connection:
         autocommit=True,
     )
     logger.info(
-        "Opened MySQL connection to %s:%s/%s",
+        "Opened %s MySQL connection to %s:%s/%s",
+        country,
         settings.db_host,
         settings.db_port,
         settings.db_name,
     )
-    return _connection
-
-
-def close_connection() -> None:
-    """Close the cached connection if it exists.
-
-    Returns:
-        None: The next ``get_connection`` call opens a new session.
-    """
-    global _connection
-
-    if _connection is not None:
-        try:
-            _connection.close()
-        except pymysql.Error:
-            logger.warning("Error while closing MySQL connection.", exc_info=True)
-        _connection = None
+    _connections[country] = connection
+    return connection
