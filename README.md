@@ -1,85 +1,329 @@
 # Quotation Microservice
 
-Microservicio en AWS Lambda para centralizar la cotización de productos de Amazon por país. Fase inicial: solo estructura.
+AWS Lambda que centraliza la cotización de productos de Amazon para Guatemala
+(`GT`) y Costa Rica (`CR`). El caller consulta Amazon y envía `OFFERS`; este
+servicio no consume ninguna API de Amazon.
 
-Países previstos: Guatemala (`GT`) y Costa Rica (`CR`). La lógica, los contratos (DTOs) y los métodos de Strategy aún no están definidos.
+Una sola Lambda atiende ambos países. El campo `country` selecciona la Strategy
+y la conexión MySQL correspondiente (`DB_GT_*` o `DB_CR_*`).
 
 ## Arquitectura
 
-Capas + Strategy por país. El handler no conoce reglas locales; cuando existan, las resolverá un factory.
-
-```
+```text
 quotation_main.py
-        │
-        ▼
-service/                         (vacío)
-        │
-        ▼
-country/country_strategy_factory.py
-        │
-        ├── country/GT/strategy.py ──► GT/service ──► GT/repository
-        └── country/CR/strategy.py ──► CR/service ──► CR/repository
-                                              │
-                    repository/              (vacío)
-                                              │
-                                    database/connection.py ──► MySQL
+  └── QuotationService
+        └── CountryStrategyFactory
+              ├── GuatemalaQuotationStrategy
+              │     ├── GuatemalaQuotationService
+              │     └── GuatemalaQuotationRepository
+              └── CostaRicaQuotationStrategy
+                    ├── CostaRicaQuotationService
+                    └── CostaRicaQuotationRepository
+                              └── database/connection.py
+                                    ├── GT → MySQL GT
+                                    └── CR → MySQL CR
 ```
 
-| Capa | Rol |
-| --- | --- |
-| `quotation_main.py` | Entrada Lambda |
-| `service/` | Lógica de negocio compartida |
-| `repository/` | Acceso a datos compartido |
-| `DTO/` | Contratos de entrada/salida entre capas |
-| `country/` | Strategy por país (contrato común, aún sin métodos) |
-| `country/*/service/` | Lógica de negocio del país |
-| `country/*/repository/` | Acceso a datos del país |
-| `database/` | Conexión MySQL (warm start) |
-| `config/` | Variables de entorno |
-| `Utils/` | Utilidades básicas (logger) |
+- `quotation_main.py`: adapta el evento Lambda al contrato.
+- `DTO/`: contratos entre handler, services y repositories.
+- `service/`: orquestación común y adaptación de ofertas Amazon.
+- `country/*/service/`: únicamente calculadora y promesa de cada país.
+- `country/*/repository/`: consultas específicas del esquema del país.
+- `repository/`: consultas compartidas por esquemas GT/CR.
+- `database/`: conexión MySQL global, abierta fuera del handler y reutilizada en warm starts.
+- `config/`: configuración del despliegue, no reglas de negocio.
 
-Convenciones previstas (cuando se implemente):
+`QuotationService` contiene el flujo completo común, basado en el cotizador GT.
+La Strategy no cotiza un producto completo: expone operaciones puntuales para
+UNSPSC/defaults, `oc_product`, partida, courier de categorías, tasa de cambio,
+`oc_setting`, calculadora y promesa. El orquestador no contiene condiciones
+`GT`/`CR`.
 
-- Service y repository se hablan con DTOs, no con entidades ni listas largas de parámetros.
-- Si hay pocos valores sueltos, máximo 3 parámetros primitivos.
-- Las Strategy de cada país deben ser intercambiables sobre el mismo contrato.
+## Flujo
 
-## Estructura
+Para cada producto, en el orden recibido:
 
+1. Cargar únicamente las constantes requeridas de `oc_setting`.
+2. Leer peso, courier y partida de `oc_product`.
+3. Aplicar overrides del request.
+4. Resolver UNSPSC en `oc_arancel_amz`.
+5. Si no existe, registrar el código con `INSERT IGNORE` en
+   `oc_category_amz_new` y usar defaults de `oc_setting`.
+6. Resolver la partida en `oc_partida_arancelaria`.
+7. Aplicar la precedencia común de courier/arancel/restricción y, cuando
+   corresponda, consultar courier en el árbol `oc_category`.
+8. Seleccionar una oferta desde `amz_offers`: primera elegible con
+   `deliveryRange.max`; si el request activa `prefer_amazon_fulfillment`,
+   primera elegible AF; si no, primera elegible. El shipping de las pasadas
+   sin max es `shippingOptions[0]`.
+9. Si la oferta elegida trae buying guidance restringido, abortar el producto.
+   Si no, calcular oferta y, cuando exista list price, lista; el special se
+   decide comparando los precios locales. Luego resolver la promesa.
+10. Retornar un `ResultObject`; un error no detiene los demás productos.
+
+La orquestación canónica proviene del cotizador activo GT y del diagrama,
+corregido con el comportamiento activo. No se copiaron ramas muertas ni
+divergencias del ETL. GT y CR mantienen mediante Strategy únicamente sus
+diferencias de esquema, partida, tasa, calculadora y promesa.
+
+## Entrada Lambda
+
+```json
+{
+  "country": "GT",
+  "prefer_amazon_fulfillment": false,
+  "products": [
+    {
+      "product_id": 123,
+      "amz_weight_kg": 0.72,
+      "pac_product_weight": null,
+      "pac_product_courier": null,
+      "pac_product_partida": "0012.34",
+      "unspsc": "52161500",
+      "amz_offers": [
+        {
+          "offerId": "offer-1",
+          "productCondition": "NEW",
+          "condition": {"conditionValue": "NEW"},
+          "price": {"priceType": "NEW", "value": {"amount": 49.99}},
+          "listPrice": {"value": {"amount": 59.99}},
+          "fulfillmentType": "AMAZON_FULFILLMENT",
+          "availability": "In Stock.",
+          "buyingGuidance": "",
+          "deliveryInformation": "Entrega en 8 días",
+          "shippingOptions": [
+            {
+              "shippingCost": {"value": {"amount": 0}},
+              "deliveryRange": {"max": "2026-09-10T23:59:59-04:00"}
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
 ```
-quotation-microservice/
-├── quotation_main.py
-├── requirements.txt
-├── config/
-│   └── settings.py
-├── database/
-│   └── connection.py
-├── Utils/
-│   └── logger.py
-├── DTO/
-├── service/
-├── repository/
-└── country/
-    ├── country_strategy_abstract.py
-    ├── country_strategy_factory.py
-    ├── GT/
-    │   ├── strategy.py
-    │   ├── service/
-    │   └── repository/
-    └── CR/
-        ├── strategy.py
-        ├── service/
-        └── repository/
+
+Reglas de forma:
+
+- `country`: requerido; `GT` o `CR`.
+- `prefer_amazon_fulfillment`: boolean opcional; default `false`. Si es
+  `true`, después de la pasada con `deliveryRange.max` se elige la primera
+  oferta elegible `AMAZON_FULFILLMENT` (detail page / variantes GT). Si es
+  `false` o se omite, esa pasada no corre (cotizador GT).
+- `products`: arreglo no vacío.
+- `product_id`: entero requerido.
+- `amz_weight_kg`: número no negativo requerido.
+- `pac_product_weight`: número no negativo opcional; reemplaza la consulta de
+  peso Pacifiko, pero el peso final sigue siendo el mayor entre Amazon/Pacifiko.
+- `pac_product_courier`: boolean opcional; reemplaza `oc_product.courier`.
+- `pac_product_partida`: string opcional para conservar ceros iniciales.
+- `unspsc`: string requerido.
+- `amz_offers`: arreglo crudo `includedDataTypes.OFFERS`; su forma puede variar.
+
+## Retorno
+
+```json
+{
+  "success": true,
+  "message": "All products were quoted successfully.",
+  "result": [
+    {
+      "success": true,
+      "Message": "Product quoted successfully.",
+      "product_id": 123,
+      "offer_id": "offer-1",
+      "amazon_price": 49.99,
+      "price_dolar": 59.99,
+      "cost_dolar": 55.22,
+      "cost_local": 427.96,
+      "special_price_dolar": 49.99,
+      "price_local": 529.0,
+      "special_price_local": 449.0,
+      "exchange_rate": 7.75,
+      "currency_code": "GTQ",
+      "delivery_promise_amz": 1,
+      "courier": false,
+      "restriction": 0,
+      "partida": "0012.34"
+    }
+  ]
+}
 ```
 
-## Lambda
+- `amazon_price`: oferta Amazon seleccionada en USD, con el shipping resuelto.
+- `price_dolar`: list price + shipping; si no hay lista, offer + shipping.
+- `special_price_dolar`: offer + shipping si supera el umbral; si no, `0`.
+- `cost_dolar`: landed cost calculado en USD.
+- `cost_local`: landed cost convertido con `exchange_rate`.
+- `price_local`: precio público local (lista si hay special; si no, oferta).
+- `special_price_local`: precio local de la oferta si hay special; si no, `0`.
+- `exchange_rate`: tasa USD → moneda local usada en el cálculo.
+- `currency_code`: código ISO de la moneda local (`GTQ` o `CRC`).
+- `success` global es `true` solamente si todos los resultados son exitosos.
+- Se conserva `Message` con mayúscula dentro de cada resultado por contrato.
 
-- Handler: `quotation_main.lambda_handler`
-- Runtime recomendado: Python 3.11+
-- Variables: ver `.env.example`
+## Precedencia por país
 
-## Cómo agregar un país (más adelante)
+### Guatemala
 
-1. Crear `country/XX/` con `strategy.py`, `service/` y `repository/`.
-2. Implementar el contrato de `CountryQuotationStrategy` cuando se defina.
-3. Registrar el país en el factory.
+- Peso: `max(amz_weight_kg, override de peso o peso BD)`.
+- Courier base: override/producto no cero; en otro caso UNSPSC.
+- Con partida: courier de partida. Si es courier, arancel/restricción permanecen
+  desde UNSPSC; si no es courier, la partida puede reemplazarlos.
+- Sin partida y courier cero: árbol de categorías.
+- Calculadora: flete por libra, seguro en base arancelaria, arancel, IVA de
+  importación courier, desaduanaje, mercancía peligrosa, margen e IVA venta.
+- Promesa: fecha máxima, días hábiles, `dias_importacion_amz` y rangos de
+  `global_store_promises`.
+
+### Costa Rica
+
+- Peso: `max(amz_weight_kg, override de peso o peso BD)`.
+- Courier: override/producto, UNSPSC y árbol de categorías.
+- Partida: reemplaza porcentaje por `dai + isc`; no reemplaza courier ni
+  restricción.
+- Calculadora: CIF, DAI/ISC, IVA aduanas, flete real, combustible, Ley 6946,
+  desaduanaje, seguro, trámite courier, margen e IVA venta.
+- Promesa: texto Amazon, umbrales AF/MF y ajuste courier.
+
+## Constantes Guatemala
+
+Verificadas contra `lectura-prod-gt`. La tabla enumera todas las keys consumidas
+por la implementación; no incluye credenciales ni tokens.
+
+| Key | País | Uso | Estado |
+| --- | --- | --- | --- |
+| `tipo_de_cambio` | GT | Conversión USD → GTQ | Existente |
+| `currency_code` | GT | Código ISO de moneda local | Nueva |
+| `margen` | GT | Margen fallback y default UNSPSC | Existente |
+| `tarifa_de_flete` | GT | Flete USD/libra no courier | Existente |
+| `tarifa_de_flete_courier` | GT | Flete USD/libra courier | Existente |
+| `desaduanaje` | GT | Cargo fijo no courier | Existente |
+| `courier_desaduanaje` | GT | Cargo fijo courier | Existente |
+| `seguro_valor_producto` | GT | Seguro en base arancelaria | Existente |
+| `danger_dolar` | GT | Cargo mercancía peligrosa | Existente |
+| `dias_importacion_amz` | GT | Buffer de promesa | Existente |
+| `global_store_promises` | GT | Rangos/textos de promesa | Existente |
+| `kilos_por_libra` | GT | Conversión kg → lb | Nueva |
+| `default_arancel` | GT | Arancel para UNSPSC desconocido | Nueva |
+| `default_restriction` | GT | Restricción default UNSPSC | Nueva |
+| `default_arancel_category_cod` | GT | Categoría default UNSPSC | Nueva |
+| `default_danger_good_active` | GT | Peligroso default UNSPSC | Nueva |
+| `default_courier` | GT | Courier default UNSPSC | Nueva |
+| `default_iva_venta` | GT | IVA de venta | Nueva |
+| `iva_importacion` | GT | IVA de importación courier | Nueva |
+| `special_discount_threshold` | GT | Umbral de special | Nueva |
+| `max_product_weight_kg` | GT | Límite de peso | Nueva |
+| `price_rounding_step` | GT | Paso de redondeo hacia arriba | Nueva |
+| `allowed_offer_price_types` | GT | Tipos de precio Amazon elegibles | Nueva |
+| `unavailable_offer_terms` | GT | Textos de oferta no disponible | Nueva |
+| `preorder_offer_terms` | GT | Textos de preventa | Nueva |
+| `promise_oos_terms` | GT | Textos OOS de promesa | Nueva |
+| `promise_in_stock_exact_terms` | GT | Disponibilidad exacta en stock | Nueva |
+| `promise_in_stock_contains_terms` | GT | Disponibilidad parcial en stock | Nueva |
+| `restricted_guidance_term` | GT | Texto de restricción Amazon | Nueva |
+| `amazon_new_condition` | GT | Condición vendible | Nueva |
+| `amazon_fulfillment_type` | GT | Identificador AF | Nueva |
+| `amazon_fulfillment_free_shipping` | GT | Política shipping AF | Nueva |
+| `prefer_offer_with_delivery_range` | GT | Prioridad de oferta con fecha | Nueva |
+| `quotation_timezone` | GT | Zona horaria de promesa | Nueva |
+| `promise_preorder_tier` | GT | Tier para preventa | Nueva |
+| `promise_missing_delivery_tier` | GT | Tier sin fecha válida | Nueva |
+| `promise_below_range_tier` | GT | Tier bajo el rango mínimo | Nueva |
+| `promise_fallback_tier` | GT | Tier fuera de rangos | Nueva |
+
+## Constantes Costa Rica
+
+Verificadas contra `lectura-qa-cr`.
+
+| Key | País | Uso | Estado |
+| --- | --- | --- | --- |
+| `tipo_de_cambio` | CR | Conversión USD → CRC | Existente |
+| `currency_code` | CR | Código ISO de moneda local | Nueva |
+| `margen` | CR | Margen fallback | Existente |
+| `default_arancel` | CR | Arancel fallback | Existente |
+| `default_iva_venta` | CR | IVA de venta fallback | Existente |
+| `tax_usa` | CR | Activa impuesto USA | Existente |
+| `ley_6946` | CR | Tasa Ley 6946 | Existente |
+| `courier_iva_aduanas` | CR | IVA aduanas courier | Existente |
+| `poliza_iva_aduanas` | CR | IVA aduanas póliza | Existente |
+| `courier_flete_aduana_kg` | CR | Flete CIF courier | Existente |
+| `poliza_flete_aduana_kg` | CR | Flete CIF póliza | Existente |
+| `courier_flete_kg` | CR | Flete real courier | Existente |
+| `poliza_flete_kg` | CR | Flete real póliza | Existente |
+| `courier_fee_combustible` | CR | Combustible courier | Existente |
+| `poliza_fee_combustible` | CR | Combustible póliza | Existente |
+| `courier_desaduanaje` | CR | Desaduanaje courier | Existente |
+| `poliza_desaduanaje` | CR | Desaduanaje póliza | Existente |
+| `courier_seguro_aduanas` | CR | Seguro CIF courier | Existente |
+| `poliza_seguro_aduanas` | CR | Seguro CIF póliza | Existente |
+| `courier_seguro_flete` | CR | Seguro flete courier | Existente |
+| `poliza_seguro_flete` | CR | Seguro flete póliza | Existente |
+| `courier_tramite_permisos` | CR | Fee permisos courier | Existente |
+| `tax_usa_rate` | CR | Tasa de impuesto USA | Nueva |
+| `default_restriction` | CR | Restricción default UNSPSC | Nueva |
+| `default_arancel_category_cod` | CR | Categoría default UNSPSC | Nueva |
+| `default_danger_good_active` | CR | Peligroso default UNSPSC | Nueva |
+| `default_courier` | CR | Courier default UNSPSC | Nueva |
+| `special_discount_threshold` | CR | Umbral de special | Nueva |
+| `max_product_weight_kg` | CR | Límite de peso | Nueva |
+| `price_rounding_step` | CR | Paso de redondeo hacia arriba | Nueva |
+| `allowed_offer_price_types` | CR | Tipos de precio Amazon elegibles | Nueva |
+| `unavailable_offer_terms` | CR | Textos de oferta no disponible | Nueva |
+| `preorder_offer_terms` | CR | Textos de preventa | Nueva |
+| `promise_tomorrow_terms` | CR | Textos equivalentes a mañana | Nueva |
+| `promise_tomorrow_days` | CR | Días equivalentes a mañana | Nueva |
+| `restricted_guidance_term` | CR | Texto de restricción Amazon | Nueva |
+| `amazon_new_condition` | CR | Condición vendible | Nueva |
+| `amazon_fulfillment_type` | CR | Identificador AF | Nueva |
+| `amazon_fulfillment_free_shipping` | CR | Política shipping AF | Nueva |
+| `prefer_offer_with_delivery_range` | CR | Prioridad de oferta con fecha | Nueva |
+| `promise_af_tier_1_max_days` | CR | Umbral AF tier 1 | Nueva |
+| `promise_af_tier_2_max_days` | CR | Umbral AF tier 2 | Nueva |
+| `promise_af_tier_3_max_days` | CR | Umbral AF tier 3 | Nueva |
+| `promise_mf_tier_1_max_days` | CR | Umbral MF tier 1 | Nueva |
+| `promise_mf_tier_2_max_days` | CR | Umbral MF tier 2 | Nueva |
+| `promise_mf_tier_3_max_days` | CR | Umbral MF tier 3 | Nueva |
+| `promise_missing_delivery_af_tier` | CR | Tier AF sin días | Nueva |
+| `promise_missing_delivery_mf_tier` | CR | Tier MF sin días | Nueva |
+| `courier_promise_shift` | CR | Penalización de promesa courier | Nueva |
+| `promise_preorder_tier` | CR | Tier para preventa | Nueva |
+| `promise_tier_1_value` | CR | Valor de tier corto | Nueva |
+| `promise_tier_2_value` | CR | Valor de tier medio | Nueva |
+| `promise_tier_3_value` | CR | Valor de tier largo | Nueva |
+| `promise_fallback_tier` | CR | Tier fuera de rangos | Nueva |
+
+Los scripts [GT_new_quotation_settings.sql](database/seeds/GT_new_quotation_settings.sql)
+y [CR_new_quotation_settings.sql](database/seeds/CR_new_quotation_settings.sql)
+contienen únicamente keys nuevas. Deben revisarse y ejecutarse una sola vez;
+el servicio falla de forma controlada si falta una key requerida.
+
+## Configuración y ejecución
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+copy .env.example .env
+python -m unittest discover -s tests -v
+```
+
+Variables de entorno:
+
+- `DB_GT_HOST`, `DB_GT_PORT`, `DB_GT_NAME`, `DB_GT_USER`,
+  `DB_GT_PASSWORD`, `DB_GT_CONNECT_TIMEOUT`.
+- `DB_CR_HOST`, `DB_CR_PORT`, `DB_CR_NAME`, `DB_CR_USER`,
+  `DB_CR_PASSWORD`, `DB_CR_CONNECT_TIMEOUT`.
+- `LOG_LEVEL`.
+
+Handler AWS: `quotation_main.lambda_handler`.
+
+## Extender a otro país
+
+1. Crear `country/XX/strategy.py`, `service/` y `repository/`.
+2. Implementar todas las operaciones puntuales de
+   `CountryQuotationStrategy`; no agregar un flujo completo por país.
+3. Registrar la Strategy en el factory.
+4. Documentar y provisionar todas las keys `oc_setting`.
+5. Agregar golden tests de política, cálculo y promesa.

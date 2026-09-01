@@ -24,6 +24,7 @@ env/
 .coverage
 htmlcov/
 .mypy_cache/
+test-massive/output/
 
 # Packaging / Lambda artifacts
 dist/
@@ -36,3 +37,7 @@ build/
 Thumbs.db
 
 .serena
+
+.local/
+
+*.sql
