@@ -61,8 +61,30 @@ class BaseQuotationRepository:
             UnspscDataDTO | None: Existing policy, or ``None`` when the code
                 must be recorded and defaulted by the common flow.
         """
-        sql = """
+        return self.find_unspsc_map((unspsc,), settings).get(unspsc)
+
+    def find_unspsc_map(
+        self,
+        codes: Sequence[str],
+        settings: CountrySettingsDTO,
+    ) -> dict[str, UnspscDataDTO | None]:
+        """Load UNSPSC policy for every distinct code in one query.
+
+        Args:
+            codes: Product classification codes from the request.
+            settings: Country defaults loaded from ``oc_setting``.
+
+        Returns:
+            dict[str, UnspscDataDTO | None]: ``None`` when the code is new.
+        """
+        unique_codes = tuple(dict.fromkeys(code for code in codes if code))
+        if not unique_codes:
+            return {}
+
+        placeholders = ", ".join(["%s"] * len(unique_codes))
+        sql = f"""
             SELECT
+                arancel_category,
                 arancel_porcentage,
                 restriction,
                 arancel_category_cod,
@@ -70,20 +92,134 @@ class BaseQuotationRepository:
                 danger_good_active,
                 courier
             FROM oc_arancel_amz
-            WHERE arancel_category = %s
-            LIMIT 1
+            WHERE arancel_category IN ({placeholders})
         """
         with get_connection(self.COUNTRY).cursor() as cursor:
-            cursor.execute(sql, (unspsc,))
-            row = cursor.fetchone()
+            cursor.execute(sql, unique_codes)
+            rows = cursor.fetchall()
 
-        # Se devuelve None en vez de un default para que el flujo común pueda
-        # distinguir el código inexistente y registrarlo antes de aplicarlo.
-        if not row:
-            return None
+        found: dict[str, UnspscDataDTO] = {}
+        for row in rows:
+            code = str(row["arancel_category"])
+            found[code] = self._unspsc_from_row(row, settings)
+        return {code: found.get(code) for code in unique_codes}
 
-        # La fila puede existir con columnas nulas; cada campo cae a su default
-        # de forma independiente en lugar de descartar la fila completa.
+    @staticmethod
+    def get_default_unspsc(settings: CountrySettingsDTO) -> UnspscDataDTO:
+        """Build the configured policy for an unknown UNSPSC.
+
+        Args:
+            settings: Country defaults loaded from ``oc_setting``.
+
+        Returns:
+            UnspscDataDTO: Default arancel, restriction, category, margin,
+                dangerous-goods and courier values.
+        """
+        return UnspscDataDTO(
+            arancel_percentage=settings.decimal("default_arancel"),
+            restriction=settings.integer("default_restriction"),
+            category_code=settings.integer("default_arancel_category_cod"),
+            margin_percentage=settings.decimal("margen"),
+            danger_good_active=settings.boolean("default_danger_good_active"),
+            courier=settings.boolean("default_courier"),
+        )
+
+    def get_category_tree_courier(self, product_id: int) -> bool:
+        """Resolve courier from the deepest flagged product category.
+
+        Args:
+            product_id: Pacifiko product identifier.
+
+        Returns:
+            bool: True when the product category tree contains a courier flag.
+        """
+        return self.get_category_tree_courier_map((product_id,)).get(product_id, False)
+
+    def get_category_tree_courier_map(
+        self,
+        product_ids: Sequence[int],
+    ) -> dict[int, bool]:
+        """Resolve category-tree courier for many products in one query.
+
+        Args:
+            product_ids: Pacifiko identifiers that still need a courier flag.
+
+        Returns:
+            dict[int, bool]: Deepest courier flag keyed by product identifier.
+        """
+        unique_ids = tuple(dict.fromkeys(product_ids))
+        result = {product_id: False for product_id in unique_ids}
+        if not unique_ids:
+            return result
+
+        placeholders = ", ".join(["%s"] * len(unique_ids))
+        sql = f"""
+            SELECT pc.product_id, c.courier, cp.level
+            FROM oc_product_to_category AS pc
+            INNER JOIN oc_category_path AS cp
+                ON cp.category_id = pc.category_id
+            INNER JOIN oc_category AS c
+                ON c.category_id = cp.path_id
+            WHERE pc.product_id IN ({placeholders}) AND c.courier = 1
+            ORDER BY pc.product_id ASC, cp.level DESC
+        """
+        with get_connection(self.COUNTRY).cursor() as cursor:
+            cursor.execute(sql, unique_ids)
+            rows = cursor.fetchall()
+
+        seen: set[int] = set()
+        for row in rows:
+            product_id = int(row["product_id"])
+            if product_id in seen or product_id not in result:
+                continue
+            result[product_id] = bool(row["courier"])
+            seen.add(product_id)
+        return result
+
+    def save_unknown_unspsc(self, unspsc: str) -> None:
+        """Insert an unknown UNSPSC idempotently.
+
+        Args:
+            unspsc: Classification absent from ``oc_arancel_amz``.
+
+        Returns:
+            None: ``oc_category_amz_new`` contains the code after the call.
+        """
+        self.save_unknown_unspsc_many((unspsc,))
+
+    def save_unknown_unspsc_many(self, codes: Sequence[str]) -> None:
+        """Insert unknown UNSPSC codes in one round-trip.
+
+        Args:
+            codes: Classifications absent from ``oc_arancel_amz``.
+
+        Returns:
+            None: ``oc_category_amz_new`` contains the codes after the call.
+        """
+        unique_codes = tuple(dict.fromkeys(code for code in codes if code))
+        if not unique_codes:
+            return
+        sql = """
+            INSERT IGNORE INTO oc_category_amz_new (category_amz)
+            VALUES (%s)
+        """
+        with get_connection(self.COUNTRY).cursor() as cursor:
+            cursor.executemany(sql, [(code,) for code in unique_codes])
+
+    @staticmethod
+    def _unspsc_from_row(
+        row: dict,
+        settings: CountrySettingsDTO,
+    ) -> UnspscDataDTO:
+        """Map one ``oc_arancel_amz`` row, filling nulls from settings.
+
+        Args:
+            row: Database record for a known UNSPSC.
+            settings: Country defaults loaded from ``oc_setting``.
+
+        Returns:
+            UnspscDataDTO: Complete policy for the code.
+        """
         return UnspscDataDTO(
             arancel_percentage=(
                 decimal_from_row(row["arancel_porcentage"], "arancel_porcentage")
@@ -116,69 +252,3 @@ class BaseQuotationRepository:
                 else settings.boolean("default_courier")
             ),
         )
-
-    @staticmethod
-    def get_default_unspsc(settings: CountrySettingsDTO) -> UnspscDataDTO:
-        """Build the configured policy for an unknown UNSPSC.
-
-        Args:
-            settings: Country defaults loaded from ``oc_setting``.
-
-        Returns:
-            UnspscDataDTO: Default arancel, restriction, category, margin,
-                dangerous-goods and courier values.
-        """
-        return UnspscDataDTO(
-            arancel_percentage=settings.decimal("default_arancel"),
-            restriction=settings.integer("default_restriction"),
-            category_code=settings.integer("default_arancel_category_cod"),
-            margin_percentage=settings.decimal("margen"),
-            danger_good_active=settings.boolean("default_danger_good_active"),
-            courier=settings.boolean("default_courier"),
-        )
-
-    def get_category_tree_courier(self, product_id: int) -> bool:
-        """Resolve courier from the deepest flagged product category.
-
-        Args:
-            product_id: Pacifiko product identifier.
-
-        Returns:
-            bool: True when the product category tree contains a courier flag.
-        """
-        # Se recorre la ruta completa de categorías y se ordena por nivel
-        # descendente, así gana la categoría más específica marcada como
-        # courier en lugar de la más general.
-        sql = """
-            SELECT c.courier
-            FROM oc_product_to_category AS pc
-            INNER JOIN oc_category_path AS cp
-                ON cp.category_id = pc.category_id
-            INNER JOIN oc_category AS c
-                ON c.category_id = cp.path_id
-            WHERE pc.product_id = %s AND c.courier = 1
-            ORDER BY cp.level DESC
-            LIMIT 1
-        """
-        with get_connection(self.COUNTRY).cursor() as cursor:
-            cursor.execute(sql, (product_id,))
-            row = cursor.fetchone()
-        return bool(row and row["courier"])
-
-    def save_unknown_unspsc(self, unspsc: str) -> None:
-        """Insert an unknown UNSPSC idempotently.
-
-        Args:
-            unspsc: Classification absent from ``oc_arancel_amz``.
-
-        Returns:
-            None: ``oc_category_amz_new`` contains the code after the call.
-        """
-        # INSERT IGNORE evita duplicados cuando varios productos del mismo
-        # request comparten el mismo UNSPSC desconocido.
-        sql = """
-            INSERT IGNORE INTO oc_category_amz_new (category_amz)
-            VALUES (%s)
-        """
-        with get_connection(self.COUNTRY).cursor() as cursor:
-            cursor.execute(sql, (unspsc,))

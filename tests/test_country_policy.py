@@ -113,7 +113,8 @@ class CountryPolicyTests(unittest.TestCase):
         self.assertEqual(default.arancel_percentage, Decimal("0.25"))
         self.assertEqual(default.restriction, 2)
         self.assertTrue(default.courier)
-        self.assertEqual(cursor.execute.call_count, 2)
+        self.assertEqual(cursor.execute.call_count, 1)
+        cursor.executemany.assert_called_once()
 
 
 if __name__ == "__main__":

@@ -18,6 +18,9 @@ class DatabaseRoutingTests(unittest.TestCase):
         """Clear process caches between tests."""
         get_settings.cache_clear()
         connection._connections.clear()
+        from database.settings_cache import clear_settings_cache
+
+        clear_settings_cache()
 
     def test_prefixed_environment_selects_country_database(self) -> None:
         """GT and CR settings are loaded from different variable prefixes."""

@@ -1,6 +1,7 @@
 """Granular contract for country-specific quotation decisions."""
 
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from decimal import Decimal
 
 from DTO.quotation_context_dto import (
@@ -109,6 +110,76 @@ class CountryQuotationStrategy(ABC):
 
         Returns:
             bool: Whether the category tree requires courier.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def load_products(self, product_ids: Sequence[int]) -> dict[int, ProductDataDTO]:
+        """Load product rows for a request batch.
+
+        Args:
+            product_ids: Pacifiko identifiers in the current request.
+
+        Returns:
+            dict[int, ProductDataDTO]: Product data keyed by identifier.
+                Missing rows are omitted so the caller can apply an empty DTO.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def load_unspsc_map(
+        self,
+        codes: Sequence[str],
+        settings: CountrySettingsDTO,
+    ) -> dict[str, UnspscDataDTO | None]:
+        """Load UNSPSC policy for every distinct code in the request.
+
+        Args:
+            codes: Product classification codes.
+            settings: Defaults for nullable policy columns.
+
+        Returns:
+            dict[str, UnspscDataDTO | None]: ``None`` marks an unknown code.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def save_unknown_unspsc_many(self, codes: Sequence[str]) -> None:
+        """Record every unknown UNSPSC in one pass.
+
+        Args:
+            codes: Classifications absent from ``oc_arancel_amz``.
+
+        Returns:
+            None: Each code is inserted idempotently.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def load_tariffs(self, partidas: Sequence[str]) -> dict[str, TariffDataDTO]:
+        """Load tariff rows for the distinct codes used in the request.
+
+        Args:
+            partidas: National tariff codes after request overrides.
+
+        Returns:
+            dict[str, TariffDataDTO]: Existing tariff policy keyed by code.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def load_category_tree_courier_map(
+        self,
+        product_ids: Sequence[int],
+    ) -> dict[int, bool]:
+        """Load category-tree courier flags for the products that still need it.
+
+        Args:
+            product_ids: Products whose courier is still unset after UNSPSC
+                and tariff resolution.
+
+        Returns:
+            dict[int, bool]: Courier flag keyed by product identifier.
         """
         raise NotImplementedError
 
