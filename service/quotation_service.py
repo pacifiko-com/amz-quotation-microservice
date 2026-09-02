@@ -63,11 +63,9 @@ class QuotationService:
                 result=(),
             )
 
-        if hasattr(strategy, "load_products"):
-            strategy = _PrefetchedStrategy(
-                strategy,
-                self._prefetch(strategy, request.products, settings),
-            )
+        strategy.bind_lookup(
+            self._prefetch(strategy, request.products, settings),
+        )
 
         results = tuple(
             self._quote_safely(
@@ -521,82 +519,6 @@ class QuotationService:
             list_calc.price_local,
             offer_calc.price_local,
         )
-
-
-class _PrefetchedStrategy:
-    """Serve batched MySQL rows while keeping calculator calls on the Strategy."""
-
-    def __init__(
-        self,
-        inner: CountryQuotationStrategy,
-        lookup: QuotationLookupDTO,
-    ) -> None:
-        """Create a read-through wrapper for one request.
-
-        Args:
-            inner: Country Strategy that owns formulas and exchange rate.
-            lookup: Rows loaded before the product loop.
-        """
-        self._inner = inner
-        self._lookup = lookup
-        self._exchange_rate = None
-
-    def resolve_settings(self) -> CountrySettingsDTO:
-        """Return settings already resolved by the common flow."""
-        return self._inner.resolve_settings()
-
-    def get_unspsc_data(
-        self,
-        unspsc: str,
-        settings: CountrySettingsDTO,
-    ) -> UnspscDataDTO | None:
-        """Return the prefetched UNSPSC row."""
-        if unspsc in self._lookup.unspsc:
-            return self._lookup.unspsc[unspsc]
-        return self._inner.get_unspsc_data(unspsc, settings)
-
-    def save_unknown_unspsc(self, unspsc: str) -> None:
-        """Skip per-product inserts; unknown codes were saved in the batch."""
-        return None
-
-    def get_default_unspsc(self, settings: CountrySettingsDTO) -> UnspscDataDTO:
-        """Build defaults for an unknown UNSPSC without a database round-trip."""
-        return self._inner.get_default_unspsc(settings)
-
-    def get_product_data(self, product_id: int) -> ProductDataDTO:
-        """Return the prefetched product row or an empty DTO."""
-        return self._lookup.products.get(product_id, EMPTY_PRODUCT_DATA)
-
-    def resolve_tariff_data(self, partida: str | None) -> TariffDataDTO | None:
-        """Return the prefetched tariff row when the code exists."""
-        if not partida:
-            return None
-        if partida in self._lookup.tariffs:
-            return self._lookup.tariffs[partida]
-        return self._inner.resolve_tariff_data(partida)
-
-    def get_category_tree_courier(self, product_id: int) -> bool:
-        """Return the prefetched category-tree courier flag."""
-        return self._lookup.category_courier.get(product_id, False)
-
-    def resolve_exchange_rate(self, settings: CountrySettingsDTO):
-        """Resolve the exchange rate once per request."""
-        if self._exchange_rate is None:
-            self._exchange_rate = self._inner.resolve_exchange_rate(settings)
-        return self._exchange_rate
-
-    def calculate(self, calculation: CalculationInputDTO):
-        """Delegate the country calculator."""
-        return self._inner.calculate(calculation)
-
-    def resolve_delivery_promise(
-        self,
-        offer: SelectedOfferDTO,
-        courier: bool,
-        settings: CountrySettingsDTO,
-    ) -> int:
-        """Delegate the country delivery promise."""
-        return self._inner.resolve_delivery_promise(offer, courier, settings)
 
 
 def _unexpected_product_error_message(exc: BaseException) -> str:
