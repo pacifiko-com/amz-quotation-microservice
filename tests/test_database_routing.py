@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import os
+import sys
 import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from config.secrets_loader import reset_secrets_loader
 from config.settings import get_database_settings, get_settings
 from database import connection
 
@@ -17,6 +20,7 @@ class DatabaseRoutingTests(unittest.TestCase):
     def tearDown(self) -> None:
         """Clear process caches between tests."""
         get_settings.cache_clear()
+        reset_secrets_loader()
         connection._connections.clear()
         from database.settings_cache import clear_settings_cache
 
@@ -28,9 +32,11 @@ class DatabaseRoutingTests(unittest.TestCase):
             "DB_GT_HOST": "gt-host",
             "DB_GT_NAME": "gt-db",
             "DB_GT_USER": "gt-user",
+            "DB_GT_PASSWORD": "gt-password",
             "DB_CR_HOST": "cr-host",
             "DB_CR_NAME": "cr-db",
             "DB_CR_USER": "cr-user",
+            "DB_CR_PASSWORD": "cr-password",
         }
         with patch.dict(os.environ, environment, clear=True):
             get_settings.cache_clear()
@@ -40,6 +46,41 @@ class DatabaseRoutingTests(unittest.TestCase):
         self.assertEqual(gt.db_host, "gt-host")
         self.assertEqual(cr.db_host, "cr-host")
         self.assertNotEqual(gt.db_name, cr.db_name)
+
+    def test_secrets_manager_fills_database_settings(self) -> None:
+        """Lambda settings are hydrated from the JSON Secrets Manager payload."""
+        boto3_module = MagicMock()
+        boto3_module.client.return_value.get_secret_value.return_value = {
+            "SecretString": json.dumps(
+                {
+                    "DB_GT_HOST": "gt-secret-host",
+                    "DB_GT_NAME": "gt-secret-db",
+                    "DB_GT_USER": "gt-secret-user",
+                    "DB_GT_PASSWORD": "gt-secret",
+                    "DB_CR_HOST": "cr-secret-host",
+                    "DB_CR_NAME": "cr-secret-db",
+                    "DB_CR_USER": "cr-secret-user",
+                    "DB_CR_PASSWORD": "cr-secret",
+                }
+            )
+        }
+        environment = {
+            "SECRETS_MANAGER_SECRET_ARN": (
+                "arn:aws:secretsmanager:us-east-2:123456789012:secret:qa"
+            ),
+            "LOG_LEVEL": "INFO",
+        }
+        with patch.dict(sys.modules, {"boto3": boto3_module}):
+            with patch.dict(os.environ, environment, clear=True):
+                reset_secrets_loader()
+                get_settings.cache_clear()
+                gt = get_database_settings("GT")
+                cr = get_database_settings("CR")
+
+        self.assertEqual(gt.db_host, "gt-secret-host")
+        self.assertEqual(gt.db_password, "gt-secret")
+        self.assertEqual(cr.db_host, "cr-secret-host")
+        boto3_module.client.assert_called_once_with("secretsmanager")
 
     @patch("database.connection.pymysql.connect")
     @patch("database.connection.get_database_settings")

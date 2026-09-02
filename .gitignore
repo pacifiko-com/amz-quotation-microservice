@@ -27,6 +27,7 @@ htmlcov/
 test-massive/output/
 
 # Packaging / Lambda artifacts
+.aws-sam/
 dist/
 build/
 *.egg-info/

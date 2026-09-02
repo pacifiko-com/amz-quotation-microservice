@@ -13,6 +13,8 @@ try:
 except ImportError:
     pass
 
+from config.secrets_loader import apply_secrets_from_manager
+
 
 @dataclass(frozen=True)
 class DatabaseSettings:
@@ -55,6 +57,7 @@ def get_settings() -> Settings:
     Returns:
         Settings: Frozen configuration reused across warm Lambda invocations.
     """
+    apply_secrets_from_manager()
     return Settings(
         databases={
             country: _load_database_settings(country)
@@ -107,11 +110,10 @@ def _load_database_settings(country: str) -> DatabaseSettings:
     """
     prefix = f"DB_{country}_"
     return DatabaseSettings(
-        db_host=os.getenv(f"{prefix}HOST", "localhost"),
-        db_port=int(os.getenv(f"{prefix}PORT", "3309")),
-        db_name=os.getenv(f"{prefix}NAME", "db_pacifiko"),
-        #db_name=os.getenv(f"{prefix}NAME", "CRProdDb"),
-        db_user=os.getenv(f"{prefix}USER", "dmorales"),
-        db_password=os.getenv(f"{prefix}PASSWORD", ''),
+        db_host=os.getenv(f"{prefix}HOST", ""),
+        db_port=int(os.getenv(f"{prefix}PORT", "3306")),
+        db_name=os.getenv(f"{prefix}NAME", ""),
+        db_user=os.getenv(f"{prefix}USER", ""),
+        db_password=os.getenv(f"{prefix}PASSWORD", ""),
         db_connect_timeout=int(os.getenv(f"{prefix}CONNECT_TIMEOUT", "10")),
     )

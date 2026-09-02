@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from typing import Any
 
@@ -26,20 +27,61 @@ def handle_quotation_event(
         quote: Endpoint-specific quotation service call.
 
     Returns:
-        dict[str, Any]: Always contains ``success``, ``message`` and
-            ``result``. Root validation/configuration failures return an
-            empty result array.
+        dict[str, Any]: Direct invokes return ``success``, ``message`` and
+            ``result``. API Gateway proxy events wrap that payload in
+            ``statusCode``, ``headers`` and a JSON ``body``.
     """
     try:
         request = parse_request(event)
         ensure_connection(request.country)
-        return quote(request).to_dict()
+        payload = quote(request).to_dict()
+        return _format_response(event, payload, 200)
     except (RequestValidationError, ValueError) as exc:
         logger.warning("Quotation request rejected: %s", exc)
-        return _failed_response(str(exc))
+        return _format_response(event, _failed_response(str(exc)), 400)
     except Exception as exc:
         logger.exception("Unexpected quotation failure.")
-        return _failed_response(_unexpected_error_message(exc))
+        return _format_response(
+            event,
+            _failed_response(_unexpected_error_message(exc)),
+            500,
+        )
+
+
+def _format_response(
+    event: dict[str, Any],
+    payload: dict[str, Any],
+    status_code: int,
+) -> dict[str, Any]:
+    """Return a direct Lambda payload or an API Gateway proxy response.
+
+    Args:
+        event: Original Lambda event.
+        payload: Public quotation JSON object.
+        status_code: HTTP status used only for API Gateway proxy events.
+
+    Returns:
+        dict[str, Any]: Unwrapped payload, or a Lambda proxy response.
+    """
+    if not _is_api_gateway_event(event):
+        return payload
+    return {
+        "statusCode": status_code,
+        "headers": {"Content-Type": "application/json"},
+        "body": json.dumps(payload),
+    }
+
+
+def _is_api_gateway_event(event: dict[str, Any]) -> bool:
+    """Detect REST API Gateway proxy events.
+
+    Args:
+        event: Original Lambda event.
+
+    Returns:
+        bool: True when API Gateway supplied a ``requestContext`` object.
+    """
+    return isinstance(event.get("requestContext"), dict)
 
 
 def _failed_response(message: str) -> dict[str, Any]:
