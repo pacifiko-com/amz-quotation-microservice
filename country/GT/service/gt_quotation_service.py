@@ -69,7 +69,8 @@ class GuatemalaQuotationService:
                 and GT constants.
 
         Returns:
-            CalculationResultDTO: Landed cost USD and rounded GTQ price.
+            CalculationResultDTO: Landed cost USD, sale price USD and rounded
+                GTQ price.
         """
         policy = calculation.policy
         settings = calculation.settings
@@ -119,27 +120,29 @@ class GuatemalaQuotationService:
             + danger_usd
         )
 
-        cost_local = cost_usd * calculation.exchange_rate
-        price_without_vat = cost_local * policy.margin_percentage
-
+        price_without_vat_usd = cost_usd * policy.margin_percentage
         # Courier arma esta base sumando componentes; no courier reutiliza
         # el precio con margen que ya se calculó arriba.
         if policy.courier:
             margin_markup = max(policy.margin_percentage - Decimal("1"), Decimal("0"))
-            vat_base = (
-                freight_usd * calculation.exchange_rate
-                + cost_local * margin_markup
-                + customs_clearance * calculation.exchange_rate
-                + danger_usd * calculation.exchange_rate
+            vat_base_usd = (
+                freight_usd
+                + cost_usd * margin_markup
+                + customs_clearance
+                + danger_usd
             )
         else:
-            vat_base = price_without_vat
-        final_price = price_without_vat + (
-            vat_base * settings.decimal("default_iva_venta")
+            vat_base_usd = price_without_vat_usd
+        price_usd = price_without_vat_usd + (
+            vat_base_usd * settings.decimal("default_iva_venta")
         )
         return CalculationResultDTO(
             cost_usd=cost_usd,
-            price_local=round_price(final_price, settings),
+            price_usd=price_usd,
+            price_local=round_price(
+                price_usd * calculation.exchange_rate,
+                settings,
+            ),
         )
 
     def resolve_delivery_promise(

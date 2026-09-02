@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
-
 from country.country_strategy_abstract import CountryQuotationStrategy
 from DTO.quotation_context_dto import CountrySettingsDTO
 from DTO.quotation_request_dto import (
@@ -83,9 +81,7 @@ class PriceQuotationService:
             settings,
             exchange_rate,
             product.amazon_price_usd,
-            product.amazon_price_usd,
             calculation.cost_usd,
+            calculation.price_usd,
             calculation.price_local,
-            special_price_dolar=Decimal("0"),
-            special_price_local=Decimal("0"),
         )
