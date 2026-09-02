@@ -27,14 +27,14 @@ class CountryStrategyFactory:
         cls._builders[country.upper()] = builder
 
     @classmethod
-    def create(cls, country: str) -> CountryQuotationStrategy:
+    def create(cls, country: str) -> CountryPrefetchedStrategy:
         """Create the Strategy registered for a country.
 
         Args:
             country: Requested country code.
 
         Returns:
-            CountryQuotationStrategy: Country implementation wrapped so
+            CountryPrefetchedStrategy: Country implementation wrapped so
                 request-level reads can reuse a prefetched lookup.
 
         Raises:
