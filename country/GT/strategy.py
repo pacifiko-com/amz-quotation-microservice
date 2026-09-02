@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from decimal import Decimal
 
 from country.country_strategy_abstract import CountryQuotationStrategy
@@ -12,6 +13,7 @@ from country.GT.service.gt_quotation_service import (
     GT_SETTING_KEYS,
     GuatemalaQuotationService,
 )
+from database.settings_cache import resolve_cached_settings
 from DTO.quotation_context_dto import (
     CalculationInputDTO,
     CalculationResultDTO,
@@ -53,7 +55,10 @@ class GuatemalaQuotationStrategy(CountryQuotationStrategy):
         """
         # Se piden solo las keys que GT usa, no toda la tabla, para que falte
         # de forma explícita cualquier constante no provisionada.
-        return self._repository.get_settings(GT_SETTING_KEYS)
+        return resolve_cached_settings(
+            "GT",
+            lambda: self._repository.get_settings(GT_SETTING_KEYS),
+        )
 
     def get_unspsc_data(
         self,
@@ -106,6 +111,69 @@ class GuatemalaQuotationStrategy(CountryQuotationStrategy):
             ProductDataDTO: Product data used when no override is supplied.
         """
         return self._repository.get_product(product_id)
+
+    def load_products(self, product_ids: Sequence[int]) -> dict[int, ProductDataDTO]:
+        """Load Guatemala product rows for the whole request.
+
+        Args:
+            product_ids: Pacifiko identifiers in the current request.
+
+        Returns:
+            dict[int, ProductDataDTO]: Product data keyed by identifier.
+        """
+        return self._repository.get_products(product_ids)
+
+    def load_unspsc_map(
+        self,
+        codes: Sequence[str],
+        settings: CountrySettingsDTO,
+    ) -> dict[str, UnspscDataDTO | None]:
+        """Load Guatemala UNSPSC policy for the whole request.
+
+        Args:
+            codes: Product classification codes.
+            settings: Defaults used for nullable columns.
+
+        Returns:
+            dict[str, UnspscDataDTO | None]: ``None`` marks an unknown code.
+        """
+        return self._repository.find_unspsc_map(codes, settings)
+
+    def save_unknown_unspsc_many(self, codes: Sequence[str]) -> None:
+        """Record unknown Guatemala UNSPSC codes in one statement.
+
+        Args:
+            codes: Classifications missing from ``oc_arancel_amz``.
+
+        Returns:
+            None: Codes are inserted idempotently.
+        """
+        self._repository.save_unknown_unspsc_many(codes)
+
+    def load_tariffs(self, partidas: Sequence[str]) -> dict[str, TariffDataDTO]:
+        """Load Guatemala tariff rows for the whole request.
+
+        Args:
+            partidas: SAC codes after request overrides.
+
+        Returns:
+            dict[str, TariffDataDTO]: Existing tariff policy keyed by code.
+        """
+        return self._repository.get_tariffs(partidas)
+
+    def load_category_tree_courier_map(
+        self,
+        product_ids: Sequence[int],
+    ) -> dict[int, bool]:
+        """Load Guatemala category-tree courier flags in one query.
+
+        Args:
+            product_ids: Products whose courier is still unset.
+
+        Returns:
+            dict[int, bool]: Courier flag keyed by product identifier.
+        """
+        return self._repository.get_category_tree_courier_map(product_ids)
 
     def resolve_tariff_data(self, partida: str | None) -> TariffDataDTO | None:
         """Resolve the assigned Guatemala SAC row.

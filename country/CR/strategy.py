@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from decimal import Decimal
 
 from country.country_strategy_abstract import CountryQuotationStrategy
@@ -10,6 +11,7 @@ from country.CR.service.cr_quotation_service import (
     CR_SETTING_KEYS,
     CostaRicaQuotationService,
 )
+from database.settings_cache import resolve_cached_settings
 from DTO.quotation_context_dto import (
     CalculationInputDTO,
     CalculationResultDTO,
@@ -51,7 +53,10 @@ class CostaRicaQuotationStrategy(CountryQuotationStrategy):
         """
         # Se piden solo las keys que CR usa, no toda la tabla, para que falte
         # de forma explícita cualquier constante no provisionada.
-        return self._repository.get_settings(CR_SETTING_KEYS)
+        return resolve_cached_settings(
+            "CR",
+            lambda: self._repository.get_settings(CR_SETTING_KEYS),
+        )
 
     def get_unspsc_data(
         self,
@@ -105,6 +110,72 @@ class CostaRicaQuotationStrategy(CountryQuotationStrategy):
         """
         return self._repository.get_product(product_id)
 
+    def load_products(self, product_ids: Sequence[int]) -> dict[int, ProductDataDTO]:
+        """Load Costa Rica product rows for the whole request.
+
+        Args:
+            product_ids: Pacifiko identifiers in the current request.
+
+        Returns:
+            dict[int, ProductDataDTO]: Product data keyed by identifier.
+        """
+        return self._repository.get_products(product_ids)
+
+    def load_unspsc_map(
+        self,
+        codes: Sequence[str],
+        settings: CountrySettingsDTO,
+    ) -> dict[str, UnspscDataDTO | None]:
+        """Load Costa Rica UNSPSC policy for the whole request.
+
+        Args:
+            codes: Product classification codes.
+            settings: Defaults used for nullable columns.
+
+        Returns:
+            dict[str, UnspscDataDTO | None]: ``None`` marks an unknown code.
+        """
+        return self._repository.find_unspsc_map(codes, settings)
+
+    def save_unknown_unspsc_many(self, codes: Sequence[str]) -> None:
+        """Record unknown Costa Rica UNSPSC codes in one statement.
+
+        Args:
+            codes: Classifications missing from ``oc_arancel_amz``.
+
+        Returns:
+            None: Codes are inserted idempotently.
+        """
+        self._repository.save_unknown_unspsc_many(codes)
+
+    def load_tariffs(self, partidas: Sequence[str]) -> dict[str, TariffDataDTO]:
+        """Load and normalize Costa Rica tariff rows for the whole request.
+
+        Args:
+            partidas: National tariff codes after request overrides.
+
+        Returns:
+            dict[str, TariffDataDTO]: Normalized tariff policy keyed by code.
+        """
+        return {
+            partida: self._normalize_tariff(tariff)
+            for partida, tariff in self._repository.get_tariffs(partidas).items()
+        }
+
+    def load_category_tree_courier_map(
+        self,
+        product_ids: Sequence[int],
+    ) -> dict[int, bool]:
+        """Load Costa Rica category-tree courier flags in one query.
+
+        Args:
+            product_ids: Products whose courier is still unset.
+
+        Returns:
+            dict[int, bool]: Courier flag keyed by product identifier.
+        """
+        return self._repository.get_category_tree_courier_map(product_ids)
+
     def resolve_tariff_data(self, partida: str | None) -> TariffDataDTO | None:
         """Resolve and normalize a Costa Rica tariff row.
 
@@ -115,7 +186,18 @@ class CostaRicaQuotationStrategy(CountryQuotationStrategy):
             TariffDataDTO | None: Row with DAI + ISC exposed as the common
                 ``arancel_percentage`` while retaining courier/restriction.
         """
-        tariff = self._repository.get_tariff(partida)
+        return self._normalize_tariff(self._repository.get_tariff(partida))
+
+    @staticmethod
+    def _normalize_tariff(tariff: TariffDataDTO | None) -> TariffDataDTO | None:
+        """Expose DAI + ISC as the common arancel field.
+
+        Args:
+            tariff: Raw Costa Rica tariff row or ``None``.
+
+        Returns:
+            TariffDataDTO | None: Normalized tariff used by the common flow.
+        """
         if tariff is None:
             return None
 

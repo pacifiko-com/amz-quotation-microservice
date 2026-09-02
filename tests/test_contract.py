@@ -51,6 +51,11 @@ class ContractTests(unittest.TestCase):
             "resolve_exchange_rate",
             "calculate",
             "resolve_delivery_promise",
+            "load_products",
+            "load_unspsc_map",
+            "save_unknown_unspsc_many",
+            "load_tariffs",
+            "load_category_tree_courier_map",
         )
         for country in ("GT", "CR"):
             strategy = CountryStrategyFactory.create(country)

@@ -9,8 +9,13 @@ from country.country_strategy_factory import CountryStrategyFactory
 from DTO.quotation_context_dto import (
     CalculationInputDTO,
     CountrySettingsDTO,
+    EMPTY_PRODUCT_DATA,
+    ProductDataDTO,
+    QuotationLookupDTO,
     ResolvedPolicyDTO,
     SelectedOfferDTO,
+    TariffDataDTO,
+    UnspscDataDTO,
 )
 from DTO.quotation_request_dto import ProductQuotationDTO, QuotationRequestDTO
 from DTO.quotation_response_dto import QuotationResponseDTO, ResultObjectDTO
@@ -58,6 +63,12 @@ class QuotationService:
                 result=(),
             )
 
+        if hasattr(strategy, "load_products"):
+            strategy = _PrefetchedStrategy(
+                strategy,
+                self._prefetch(strategy, request.products, settings),
+            )
+
         results = tuple(
             self._quote_safely(
                 strategy,
@@ -82,6 +93,93 @@ class QuotationService:
             result=results,
         )
 
+    def _prefetch(
+        self,
+        strategy: CountryQuotationStrategy,
+        products: tuple[ProductQuotationDTO, ...],
+        settings: CountrySettingsDTO,
+    ) -> QuotationLookupDTO:
+        """Load every MySQL row needed by the request in a few batched queries.
+
+        Args:
+            strategy: Country provider selected once for the request.
+            products: Products in request order.
+            settings: Cached country constants.
+
+        Returns:
+            QuotationLookupDTO: In-memory maps reused by every product.
+        """
+        products_map = strategy.load_products(
+            tuple(item.product_id for item in products)
+        )
+        unspsc_map = strategy.load_unspsc_map(
+            tuple(item.unspsc for item in products),
+            settings,
+        )
+        missing_codes = tuple(
+            code for code, data in unspsc_map.items() if data is None
+        )
+        if missing_codes:
+            strategy.save_unknown_unspsc_many(missing_codes)
+
+        partidas = []
+        for item in products:
+            stored = products_map.get(item.product_id, EMPTY_PRODUCT_DATA)
+            partida = item.pac_product_partida or stored.partida
+            if partida:
+                partidas.append(partida)
+        tariffs = strategy.load_tariffs(partidas)
+
+        need_category: list[int] = []
+        for item in products:
+            stored = products_map.get(item.product_id, EMPTY_PRODUCT_DATA)
+            unspsc_data = unspsc_map.get(item.unspsc) or strategy.get_default_unspsc(
+                settings
+            )
+            partida = item.pac_product_partida or stored.partida
+            tariff = tariffs.get(partida) if partida else None
+            if self._needs_category_tree(item, stored, unspsc_data, tariff):
+                need_category.append(item.product_id)
+
+        return QuotationLookupDTO(
+            products=products_map,
+            unspsc=unspsc_map,
+            tariffs=tariffs,
+            category_courier=(
+                strategy.load_category_tree_courier_map(need_category)
+                if need_category
+                else {}
+            ),
+        )
+
+    @staticmethod
+    def _needs_category_tree(
+        product: ProductQuotationDTO,
+        product_data: ProductDataDTO,
+        unspsc_data: UnspscDataDTO,
+        tariff: TariffDataDTO | None,
+    ) -> bool:
+        """Return whether the category-tree courier query is still required.
+
+        Args:
+            product: Current product DTO.
+            product_data: Stored Pacifiko product row.
+            unspsc_data: Resolved or default UNSPSC policy.
+            tariff: Assigned tariff row when a partida exists.
+
+        Returns:
+            bool: True only when no tariff is assigned and courier is still off.
+        """
+        if tariff is not None:
+            return False
+        product_courier = (
+            product.pac_product_courier
+            if product.pac_product_courier is not None
+            else product_data.courier
+        )
+        courier = product_courier if product_courier else unspsc_data.courier
+        return not courier
+
     def _quote_safely(
         self,
         strategy: CountryQuotationStrategy,
@@ -101,8 +199,7 @@ class QuotationService:
             ResultObjectDTO: Successful quote or isolated product failure.
         """
         # Aísla la falla de un producto para que los demás sí se coticen. Los
-        # errores esperados devuelven su mensaje al caller; los inesperados se
-        # registran completos y se responden con un mensaje genérico.
+        # errores esperados e inesperados devuelven su mensaje al caller.
         try:
             return self._quote_product(
                 strategy,
@@ -121,11 +218,11 @@ class QuotationService:
                 message=str(exc),
                 product_id=product.product_id,
             )
-        except Exception:
+        except Exception as exc:
             logger.exception("Product quotation failed product_id=%s", product.product_id)
             return ResultObjectDTO(
                 success=False,
-                message="Unexpected product quotation failure.",
+                message=_unexpected_product_error_message(exc),
                 product_id=product.product_id,
             )
 
@@ -424,3 +521,96 @@ class QuotationService:
             list_calc.price_local,
             offer_calc.price_local,
         )
+
+
+class _PrefetchedStrategy:
+    """Serve batched MySQL rows while keeping calculator calls on the Strategy."""
+
+    def __init__(
+        self,
+        inner: CountryQuotationStrategy,
+        lookup: QuotationLookupDTO,
+    ) -> None:
+        """Create a read-through wrapper for one request.
+
+        Args:
+            inner: Country Strategy that owns formulas and exchange rate.
+            lookup: Rows loaded before the product loop.
+        """
+        self._inner = inner
+        self._lookup = lookup
+        self._exchange_rate = None
+
+    def resolve_settings(self) -> CountrySettingsDTO:
+        """Return settings already resolved by the common flow."""
+        return self._inner.resolve_settings()
+
+    def get_unspsc_data(
+        self,
+        unspsc: str,
+        settings: CountrySettingsDTO,
+    ) -> UnspscDataDTO | None:
+        """Return the prefetched UNSPSC row."""
+        if unspsc in self._lookup.unspsc:
+            return self._lookup.unspsc[unspsc]
+        return self._inner.get_unspsc_data(unspsc, settings)
+
+    def save_unknown_unspsc(self, unspsc: str) -> None:
+        """Skip per-product inserts; unknown codes were saved in the batch."""
+        return None
+
+    def get_default_unspsc(self, settings: CountrySettingsDTO) -> UnspscDataDTO:
+        """Build defaults for an unknown UNSPSC without a database round-trip."""
+        return self._inner.get_default_unspsc(settings)
+
+    def get_product_data(self, product_id: int) -> ProductDataDTO:
+        """Return the prefetched product row or an empty DTO."""
+        return self._lookup.products.get(product_id, EMPTY_PRODUCT_DATA)
+
+    def resolve_tariff_data(self, partida: str | None) -> TariffDataDTO | None:
+        """Return the prefetched tariff row when the code exists."""
+        if not partida:
+            return None
+        if partida in self._lookup.tariffs:
+            return self._lookup.tariffs[partida]
+        return self._inner.resolve_tariff_data(partida)
+
+    def get_category_tree_courier(self, product_id: int) -> bool:
+        """Return the prefetched category-tree courier flag."""
+        return self._lookup.category_courier.get(product_id, False)
+
+    def resolve_exchange_rate(self, settings: CountrySettingsDTO):
+        """Resolve the exchange rate once per request."""
+        if self._exchange_rate is None:
+            self._exchange_rate = self._inner.resolve_exchange_rate(settings)
+        return self._exchange_rate
+
+    def calculate(self, calculation: CalculationInputDTO):
+        """Delegate the country calculator."""
+        return self._inner.calculate(calculation)
+
+    def resolve_delivery_promise(
+        self,
+        offer: SelectedOfferDTO,
+        courier: bool,
+        settings: CountrySettingsDTO,
+    ) -> int:
+        """Delegate the country delivery promise."""
+        return self._inner.resolve_delivery_promise(offer, courier, settings)
+
+
+def _unexpected_product_error_message(exc: BaseException) -> str:
+    """Build a product message that includes the unexpected error.
+
+    Args:
+        exc: Exception that escaped the product quotation flow.
+
+    Returns:
+        str: Generic prefix plus exception type and detail.
+    """
+    detail = str(exc).strip()
+    name = type(exc).__name__
+    if detail:
+        return f"Unexpected product quotation failure: {name}: {detail}"
+    return f"Unexpected product quotation failure: {name}"
+

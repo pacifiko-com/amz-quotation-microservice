@@ -130,6 +130,26 @@ class CountrySettingsDTO:
 
 
 @dataclass(frozen=True)
+class QuotationLookupDTO:
+    """Batched MySQL rows for one quotation request.
+
+    Attributes:
+        products: ``oc_product`` rows keyed by product identifier.
+        unspsc: UNSPSC policy keyed by code. ``None`` means the code is new.
+        tariffs: Tariff rows keyed by national code.
+        category_courier: Category-tree courier flags for remaining products.
+    """
+
+    products: dict[int, ProductDataDTO]
+    unspsc: dict[str, UnspscDataDTO | None]
+    tariffs: dict[str, TariffDataDTO]
+    category_courier: dict[int, bool]
+
+
+EMPTY_PRODUCT_DATA = ProductDataDTO(weight_kg=None, courier=None, partida=None)
+
+
+@dataclass(frozen=True)
 class SelectedOfferDTO:
     """Canonical fields extracted from a variable Amazon offer."""
 
