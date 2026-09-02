@@ -180,10 +180,37 @@ class ResolvedPolicyDTO:
 
 
 @dataclass(frozen=True)
+class ResolvedPricesDTO:
+    """Quoted Amazon and sale amounts after offer-versus-list resolution.
+
+    Attributes:
+        amazon_price: Public Amazon USD amount. List price when a special
+            qualifies; otherwise the selected offer.
+        special_amazon_price: Selected Amazon offer USD when a special
+            qualifies; otherwise ``None``.
+        cost_usd: Landed cost in USD from the offer calculation.
+        price_usd: Quoted public sale price in USD from the calculator.
+        price_local: Quoted public sale price in local currency.
+        special_price_usd: Quoted special sale price in USD, or ``None``.
+        special_price_local: Quoted special sale price in local currency,
+            or ``None``.
+    """
+
+    amazon_price: Decimal
+    special_amazon_price: Decimal | None
+    cost_usd: Decimal
+    price_usd: Decimal
+    price_local: Decimal
+    special_price_usd: Decimal | None
+    special_price_local: Decimal | None
+
+
+@dataclass(frozen=True)
 class CalculationResultDTO:
     """Pure calculator output for one Amazon USD price."""
 
     cost_usd: Decimal
+    price_usd: Decimal
     price_local: Decimal
 
 

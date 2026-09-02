@@ -151,6 +151,7 @@ class CountryCalculatorTests(unittest.TestCase):
         )
 
         self.assertEqual(result.cost_usd, Decimal("113.300000"))
+        self.assertEqual(result.price_usd, Decimal("152.275200"))
         self.assertEqual(result.price_local, Decimal("1145"))
 
     def test_costa_rica_poliza_golden_case(self) -> None:
@@ -193,6 +194,7 @@ class CountryCalculatorTests(unittest.TestCase):
         )
 
         self.assertEqual(result.cost_usd, Decimal("123.77500"))
+        self.assertEqual(result.price_usd, Decimal("153.852325"))
         self.assertEqual(result.price_local, Decimal("76930"))
 
     @staticmethod

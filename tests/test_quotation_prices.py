@@ -14,6 +14,7 @@ from DTO.quotation_context_dto import (
     SelectedOfferDTO,
 )
 from DTO.quotation_request_dto import PriceQuotationProductDTO, ProductQuotationDTO
+from DTO.quotation_response_dto import ResultObjectDTO
 from service.price_quotation_service import PriceQuotationService
 from service.quotation_service import QuotationService
 
@@ -25,6 +26,7 @@ class _LinearCalculator:
         """Return local price as ten times the USD input."""
         return CalculationResultDTO(
             cost_usd=calculation.amazon_price_usd,
+            price_usd=calculation.amazon_price_usd * Decimal("10"),
             price_local=calculation.amazon_price_usd * Decimal("10"),
         )
 
@@ -54,7 +56,7 @@ class QuotationPriceTests(unittest.TestCase):
         """A qualifying local discount publishes list as price and offer as special."""
         offer = self._offer(price=Decimal("100"), list_price=Decimal("120"))
 
-        price, special, cost, local, special_local = QuotationService._resolve_prices(
+        quoted = QuotationService._resolve_prices(
             _LinearCalculator(),
             offer,
             self.policy,
@@ -62,17 +64,19 @@ class QuotationPriceTests(unittest.TestCase):
             self.settings,
         )
 
-        self.assertEqual(price, Decimal("120"))
-        self.assertEqual(special, Decimal("100"))
-        self.assertEqual(cost, Decimal("100"))
-        self.assertEqual(local, Decimal("1200"))
-        self.assertEqual(special_local, Decimal("1000"))
+        self.assertEqual(quoted.amazon_price, Decimal("120"))
+        self.assertEqual(quoted.special_amazon_price, Decimal("100"))
+        self.assertEqual(quoted.cost_usd, Decimal("100"))
+        self.assertEqual(quoted.price_usd, Decimal("1200"))
+        self.assertEqual(quoted.price_local, Decimal("1200"))
+        self.assertEqual(quoted.special_price_usd, Decimal("1000"))
+        self.assertEqual(quoted.special_price_local, Decimal("1000"))
 
     def test_special_collapses_when_local_discount_is_below_threshold(self) -> None:
         """A local discount under the rounded percent threshold drops special."""
         offer = self._offer(price=Decimal("100"), list_price=Decimal("103"))
 
-        price, special, cost, local, special_local = QuotationService._resolve_prices(
+        quoted = QuotationService._resolve_prices(
             _LinearCalculator(),
             offer,
             self.policy,
@@ -80,11 +84,13 @@ class QuotationPriceTests(unittest.TestCase):
             self.settings,
         )
 
-        self.assertEqual(price, Decimal("100"))
-        self.assertEqual(special, Decimal("0"))
-        self.assertEqual(cost, Decimal("100"))
-        self.assertEqual(local, Decimal("1000"))
-        self.assertEqual(special_local, Decimal("0"))
+        self.assertEqual(quoted.amazon_price, Decimal("100"))
+        self.assertIsNone(quoted.special_amazon_price)
+        self.assertEqual(quoted.cost_usd, Decimal("100"))
+        self.assertEqual(quoted.price_usd, Decimal("1000"))
+        self.assertEqual(quoted.price_local, Decimal("1000"))
+        self.assertIsNone(quoted.special_price_usd)
+        self.assertIsNone(quoted.special_price_local)
 
     def test_contains_restricted_guidance_aborts_selected_offer(self) -> None:
         """The selected offer aborts the product; no replacement is searched."""
@@ -160,6 +166,7 @@ class QuotationPriceTests(unittest.TestCase):
         strategy.resolve_exchange_rate.return_value = Decimal("7.75")
         strategy.calculate.return_value = CalculationResultDTO(
             cost_usd=Decimal("80"),
+            price_usd=Decimal("129.03"),
             price_local=Decimal("1000"),
         )
 
@@ -177,15 +184,71 @@ class QuotationPriceTests(unittest.TestCase):
 
         self.assertTrue(result.success)
         self.assertEqual(result.amazon_price, Decimal("100"))
-        self.assertEqual(result.price_dolar, Decimal("100"))
+        self.assertIsNone(result.special_amazon_price)
+        self.assertEqual(result.price_dolar, Decimal("129.03"))
+        self.assertEqual(result.price_local, Decimal("1000"))
         self.assertEqual(result.cost_dolar, Decimal("80"))
         self.assertEqual(result.cost_local, Decimal("620"))
-        self.assertEqual(result.price_local, Decimal("1000"))
-        self.assertEqual(result.special_price_dolar, Decimal("0"))
+        self.assertIsNone(result.special_price_dolar)
+        self.assertIsNone(result.special_price_local)
         self.assertEqual(result.offer_id, "")
         self.assertIsNone(result.delivery_promise_amz)
         strategy.resolve_delivery_promise.assert_not_called()
         strategy.calculate.assert_called_once()
+
+    def test_product_result_serializes_special_fields_in_contract_order(self) -> None:
+        """Public product keys follow the quotation response contract."""
+        payload = ResultObjectDTO(
+            success=True,
+            message="ok",
+            product_id=10,
+            offer_id="offer-1",
+            amazon_price=Decimal("120"),
+            special_amazon_price=Decimal("100"),
+            price_dolar=Decimal("120"),
+            price_local=Decimal("1200"),
+            special_price_dolar=Decimal("100"),
+            special_price_local=Decimal("1000"),
+            cost_dolar=Decimal("80"),
+            cost_local=Decimal("620"),
+            exchange_rate=Decimal("7.75"),
+            currency_code="GTQ",
+            delivery_promise_amz=1,
+            courier=False,
+            restriction=0,
+            partida="0012",
+        ).to_dict()
+
+        self.assertEqual(
+            list(payload.keys()),
+            [
+                "product_id",
+                "offer_id",
+                "amazon_price",
+                "special_amazon_price",
+                "price_dolar",
+                "price_local",
+                "special_price_dolar",
+                "special_price_local",
+                "cost_dolar",
+                "cost_local",
+                "exchange_rate",
+                "currency_code",
+                "delivery_promise_amz",
+                "courier",
+                "restriction",
+                "partida",
+                "success",
+                "Message",
+            ],
+        )
+        self.assertIsNone(
+            ResultObjectDTO(
+                success=False,
+                message="fail",
+                product_id=10,
+            ).to_dict()["special_amazon_price"]
+        )
 
     @staticmethod
     def _offer(

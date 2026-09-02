@@ -70,7 +70,9 @@ class QuotationOrchestrator:
 
         # Fetch data in a single batch query and bind it to the strategy
         # to reuse it by every product quotation.
-        strategy.bind_lookup(self.prefetch(strategy, products, settings))
+        bind_lookup = getattr(strategy, "bind_lookup", None)
+        if callable(bind_lookup):
+            bind_lookup(self.prefetch(strategy, products, settings))
 
         results = tuple(
             self.quote_safely(strategy, product, settings, quote_product)
@@ -348,7 +350,8 @@ class QuotationOrchestrator:
             settings: Country constants loaded from ``oc_setting``.
 
         Returns:
-            CalculationResultDTO: Landed cost USD and local sale price.
+            CalculationResultDTO: Landed cost USD, sale price USD and local
+                sale price.
         """
         return strategy.calculate(
             CalculationInputDTO(
@@ -366,11 +369,12 @@ class QuotationOrchestrator:
         settings: CountrySettingsDTO,
         exchange_rate: Decimal,
         amazon_price: Decimal,
-        price_dolar: Decimal,
         cost_dolar: Decimal,
+        price_dolar: Decimal,
         price_local: Decimal,
-        special_price_dolar: Decimal = Decimal("0"),
-        special_price_local: Decimal = Decimal("0"),
+        special_amazon_price: Decimal | None = None,
+        special_price_dolar: Decimal | None = None,
+        special_price_local: Decimal | None = None,
         offer_id: str = "",
         delivery_promise_amz: int | None = None,
     ) -> ResultObjectDTO:
@@ -381,12 +385,13 @@ class QuotationOrchestrator:
             policy: Resolved import policy.
             settings: Country constants that include the currency code.
             exchange_rate: USD-to-local rate used for this product.
-            amazon_price: Amazon USD amount used as calculator input.
-            price_dolar: Public USD price.
+            amazon_price: Public Amazon USD amount.
             cost_dolar: Landed cost in USD.
-            price_local: Public local price.
-            special_price_dolar: Special USD price, or zero.
-            special_price_local: Special local price, or zero.
+            price_dolar: Quoted sale price in USD from the calculator.
+            price_local: Quoted sale price in local currency.
+            special_amazon_price: Special Amazon USD price, or ``None``.
+            special_price_dolar: Quoted special sale price in USD, or ``None``.
+            special_price_local: Quoted special local price, or ``None``.
             offer_id: Selected Amazon offer identifier when applicable.
             delivery_promise_amz: Country promise tier when an offer exists.
 
@@ -399,12 +404,13 @@ class QuotationOrchestrator:
             product_id=product_id,
             offer_id=offer_id,
             amazon_price=amazon_price,
+            special_amazon_price=special_amazon_price,
             price_dolar=price_dolar,
+            price_local=price_local,
+            special_price_dolar=special_price_dolar,
+            special_price_local=special_price_local,
             cost_dolar=cost_dolar,
             cost_local=cost_dolar * exchange_rate,
-            special_price_dolar=special_price_dolar,
-            price_local=price_local,
-            special_price_local=special_price_local,
             exchange_rate=exchange_rate,
             currency_code=settings.require("currency_code"),
             delivery_promise_amz=delivery_promise_amz,

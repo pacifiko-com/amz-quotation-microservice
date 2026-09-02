@@ -8,6 +8,7 @@ from country.country_strategy_abstract import CountryQuotationStrategy
 from DTO.quotation_context_dto import (
     CountrySettingsDTO,
     ResolvedPolicyDTO,
+    ResolvedPricesDTO,
     SelectedOfferDTO,
 )
 from DTO.quotation_request_dto import ProductQuotationDTO, QuotationRequestDTO
@@ -103,13 +104,7 @@ class QuotationService:
             )
 
         exchange_rate = strategy.resolve_exchange_rate(settings)
-        (
-            price_dolar,
-            special_dolar,
-            cost_dolar,
-            price_local,
-            special_price_local,
-        ) = self._resolve_prices(
+        prices = self._resolve_prices(
             strategy,
             offer,
             policy,
@@ -126,12 +121,13 @@ class QuotationService:
             policy,
             settings,
             exchange_rate,
-            offer.price_usd,
-            price_dolar,
-            cost_dolar,
-            price_local,
-            special_price_dolar=special_dolar,
-            special_price_local=special_price_local,
+            prices.amazon_price,
+            prices.cost_usd,
+            prices.price_usd,
+            prices.price_local,
+            special_amazon_price=prices.special_amazon_price,
+            special_price_dolar=prices.special_price_usd,
+            special_price_local=prices.special_price_local,
             offer_id=offer.offer_id,
             delivery_promise_amz=promise,
         )
@@ -171,7 +167,7 @@ class QuotationService:
         policy: ResolvedPolicyDTO,
         exchange_rate: Decimal,
         settings: CountrySettingsDTO,
-    ) -> tuple[Decimal, Decimal, Decimal, Decimal, Decimal]:
+    ) -> ResolvedPricesDTO:
         """Calculate offer and list prices, then decide if a special applies.
 
         Args:
@@ -182,9 +178,7 @@ class QuotationService:
             settings: Configured special discount threshold.
 
         Returns:
-            tuple[Decimal, Decimal, Decimal, Decimal, Decimal]: Public USD
-                price, special USD price, landed cost USD, public local
-                price and special local price.
+            ResolvedPricesDTO: Amazon amounts and quoted sale prices.
         """
         offer_calc = QuotationOrchestrator.calculate(
             strategy,
@@ -195,12 +189,14 @@ class QuotationService:
         )
         # Sin precio de lista no hay segunda corrida: un solo cálculo.
         if offer.list_price_usd is None or offer.list_price_usd <= 0:
-            return (
-                offer.price_usd,
-                Decimal("0"),
-                offer_calc.cost_usd,
-                offer_calc.price_local,
-                Decimal("0"),
+            return ResolvedPricesDTO(
+                amazon_price=offer.price_usd,
+                special_amazon_price=None,
+                cost_usd=offer_calc.cost_usd,
+                price_usd=offer_calc.price_usd,
+                price_local=offer_calc.price_local,
+                special_price_usd=None,
+                special_price_local=None,
             )
 
         # El umbral se compara sobre los precios locales ya calculados, no
@@ -213,12 +209,14 @@ class QuotationService:
             settings,
         )
         if list_calc.price_local <= 0:
-            return (
-                offer.price_usd,
-                Decimal("0"),
-                offer_calc.cost_usd,
-                offer_calc.price_local,
-                Decimal("0"),
+            return ResolvedPricesDTO(
+                amazon_price=offer.price_usd,
+                special_amazon_price=None,
+                cost_usd=offer_calc.cost_usd,
+                price_usd=offer_calc.price_usd,
+                price_local=offer_calc.price_local,
+                special_price_usd=None,
+                special_price_local=None,
             )
 
         discount_pct = (
@@ -230,17 +228,21 @@ class QuotationService:
             settings.decimal("special_discount_threshold") * Decimal("100")
         ).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
         if discount_pct < threshold_pct:
-            return (
-                offer.price_usd,
-                Decimal("0"),
-                offer_calc.cost_usd,
-                offer_calc.price_local,
-                Decimal("0"),
+            return ResolvedPricesDTO(
+                amazon_price=offer.price_usd,
+                special_amazon_price=None,
+                cost_usd=offer_calc.cost_usd,
+                price_usd=offer_calc.price_usd,
+                price_local=offer_calc.price_local,
+                special_price_usd=None,
+                special_price_local=None,
             )
-        return (
-            offer.list_price_usd,
-            offer.price_usd,
-            offer_calc.cost_usd,
-            list_calc.price_local,
-            offer_calc.price_local,
+        return ResolvedPricesDTO(
+            amazon_price=offer.list_price_usd,
+            special_amazon_price=offer.price_usd,
+            cost_usd=offer_calc.cost_usd,
+            price_usd=list_calc.price_usd,
+            price_local=list_calc.price_local,
+            special_price_usd=offer_calc.price_usd,
+            special_price_local=offer_calc.price_local,
         )

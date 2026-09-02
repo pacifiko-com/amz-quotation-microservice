@@ -16,18 +16,21 @@ class ResultObjectDTO:
         message: Product-level response exposed as ``Message``.
         product_id: Pacifiko product identifier from the request.
         offer_id: Identifier of the selected Amazon offer.
-        amazon_price: Selected Amazon offer amount in USD, including the
-            resolved shipping used as calculator input.
-        price_dolar: Amazon list price plus shipping, or offer price when no
-            list price exists.
+        amazon_price: Public Amazon USD amount. List price when a special
+            qualifies; otherwise the selected offer.
+        special_amazon_price: Selected Amazon offer USD when a special
+            qualifies; otherwise ``None``.
+        price_dolar: Quoted sale price in USD from the country calculator,
+            before local rounding.
+        price_local: Quoted sale price in local currency. When a special
+            qualifies this is the list calculation; otherwise the offer
+            calculation.
+        special_price_dolar: Quoted special sale price in USD from the
+            calculator, or ``None``.
+        special_price_local: Quoted special sale price in local currency
+            when a special qualifies; otherwise ``None``.
         cost_dolar: Landed cost in USD.
         cost_local: Landed cost converted with the product exchange rate.
-        special_price_dolar: Amazon offer price when its configured discount
-            qualifies as special; otherwise zero.
-        price_local: Public local price. When a special qualifies this is the
-            list calculation; otherwise the offer calculation.
-        special_price_local: Offer local price when a special qualifies;
-            otherwise zero.
         exchange_rate: USD-to-local rate used for this product.
         currency_code: Local ISO currency code from ``oc_setting``.
         delivery_promise_amz: Country delivery promise tier.
@@ -41,12 +44,13 @@ class ResultObjectDTO:
     product_id: int
     offer_id: str = ""
     amazon_price: Decimal | None = None
+    special_amazon_price: Decimal | None = None
     price_dolar: Decimal | None = None
+    price_local: Decimal | None = None
+    special_price_dolar: Decimal | None = None
+    special_price_local: Decimal | None = None
     cost_dolar: Decimal | None = None
     cost_local: Decimal | None = None
-    special_price_dolar: Decimal | None = None
-    price_local: Decimal | None = None
-    special_price_local: Decimal | None = None
     exchange_rate: Decimal | None = None
     currency_code: str | None = None
     delivery_promise_amz: int | None = None
@@ -62,23 +66,24 @@ class ResultObjectDTO:
                 emitted as numbers while ``Message`` preserves required case.
         """
         return {
-            "success": self.success,
-            "Message": self.message,
             "product_id": self.product_id,
             "offer_id": self.offer_id,
             "amazon_price": _number(self.amazon_price),
+            "special_amazon_price": _number(self.special_amazon_price),
             "price_dolar": _number(self.price_dolar),
+            "price_local": _number(self.price_local),
+            "special_price_dolar": _number(self.special_price_dolar),
+            "special_price_local": _number(self.special_price_local),
             "cost_dolar": _number(self.cost_dolar),
             "cost_local": _number(self.cost_local),
-            "special_price_dolar": _number(self.special_price_dolar),
-            "price_local": _number(self.price_local),
-            "special_price_local": _number(self.special_price_local),
             "exchange_rate": _number(self.exchange_rate),
             "currency_code": self.currency_code,
             "delivery_promise_amz": self.delivery_promise_amz,
             "courier": self.courier,
             "restriction": self.restriction,
             "partida": self.partida,
+            "success": self.success,
+            "Message": self.message,
         }
 
 

@@ -82,7 +82,8 @@ class CostaRicaQuotationService:
                 and CR constants.
 
         Returns:
-            CalculationResultDTO: Landed cost USD and rounded CRC price.
+            CalculationResultDTO: Landed cost USD, sale price USD and rounded
+                CRC price.
         """
         policy = calculation.policy
         settings = calculation.settings
@@ -143,17 +144,17 @@ class CostaRicaQuotationService:
         )
         cost_usd = base_cost + permit_fee
         sale_usd = base_cost * policy.margin_percentage + permit_fee
+        price_usd = sale_usd * (Decimal("1") + settings.decimal("default_iva_venta"))
 
         # CR aplica el recargo sobre el total y convierte al final; GT
-        # convierte antes y arma esa base por componentes.
-        sale_local = (
-            sale_usd
-            * (Decimal("1") + settings.decimal("default_iva_venta"))
-            * calculation.exchange_rate
-        )
+        # convierte el precio USD ya calculado.
         return CalculationResultDTO(
             cost_usd=cost_usd,
-            price_local=round_price(sale_local, settings),
+            price_usd=price_usd,
+            price_local=round_price(
+                price_usd * calculation.exchange_rate,
+                settings,
+            ),
         )
 
     def resolve_delivery_promise(
