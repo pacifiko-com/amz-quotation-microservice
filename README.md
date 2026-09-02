@@ -316,8 +316,126 @@ Variables de entorno:
 - `DB_CR_HOST`, `DB_CR_PORT`, `DB_CR_NAME`, `DB_CR_USER`,
   `DB_CR_PASSWORD`, `DB_CR_CONNECT_TIMEOUT`.
 - `LOG_LEVEL`.
+- `SECRETS_MANAGER_SECRET_ARN` (solo en Lambda; el JSON del secreto debe
+  incluir las keys `DB_GT_*` y `DB_CR_*`).
 
 Handler AWS: `quotation_main.lambda_handler`.
+
+## Infraestructura AWS
+
+La infraestructura se define en
+[`sam/template-quotation.yaml`](sam/template-quotation.yaml) y se despliega
+desde la raíz del repositorio. QA y producción son stacks independientes: cada
+`sam deploy` crea solo las dos funciones de ese ambiente.
+
+| Ambiente | Handler | Función |
+| --- | --- | --- |
+| QA | `quotation_main.lambda_handler` | `amz-quotation-microservice-qa-quotation` |
+| QA | `price_quotation_main.lambda_handler` | `amz-quotation-microservice-qa-price-quotation` |
+| Producción | `quotation_main.lambda_handler` | `amz-quotation-microservice-prod-quotation` |
+| Producción | `price_quotation_main.lambda_handler` | `amz-quotation-microservice-prod-price-quotation` |
+
+Cada stack crea su propia API REST (`amz-quotation-microservice-qa-api` o
+`amz-quotation-microservice-prod-api`), API Key y Usage Plan. El stage de API
+Gateway es el ambiente, para que la URL deje claro el destino:
+
+- QA: `POST /qa/quotation` y `POST /qa/price-quotation`.
+- Producción: `POST /prod/quotation` y `POST /prod/price-quotation`.
+
+Todas las funciones usan Python 3.12, las mismas subnets privadas y el mismo
+security group configurados en `categories-bulk-functions`:
+`subnet-0d4a8910e3afcfd71`, `subnet-0a200336479c88ead` y
+`sg-0eb223bab8ae85751`. SAM crea el IAM Role de cada función (sin nombre fijo)
+con ejecución básica, acceso a la VPC y `secretsmanager:GetSecretValue`
+únicamente sobre el secreto de ese ambiente.
+
+`SecretArn` identifica el secreto de Secrets Manager. El valor debe ser un
+JSON con las keys `DB_GT_*` y `DB_CR_*` (y opcionalmente `LOG_LEVEL`). Al
+iniciar, `config/secrets_loader.py` copia esas keys al entorno y
+`config/settings.py` las lee. El runtime de Lambda ya incluye boto3. Las
+Lambdas están en subnets privadas: Secrets Manager requiere NAT o un VPC
+endpoint. No uses los secretos de `categories-bulk-functions` salvo que
+contengan exactamente la configuración de quotation.
+
+La configuración de SAM está en
+[`samconfig.toml`](samconfig.toml). Debes desplegar con `--config-env qa` o
+`--config-env prod`. No guardes contraseñas ni valores secretos en el
+repositorio.
+
+Ejemplo de secreto JSON:
+
+```json
+{
+  "DB_GT_HOST": "gt.example.internal",
+  "DB_GT_PORT": "3306",
+  "DB_GT_NAME": "qa_gt",
+  "DB_GT_USER": "quotation",
+  "DB_GT_PASSWORD": "...",
+  "DB_GT_CONNECT_TIMEOUT": "10",
+  "DB_CR_HOST": "cr.example.internal",
+  "DB_CR_PORT": "3306",
+  "DB_CR_NAME": "qa_cr",
+  "DB_CR_USER": "quotation",
+  "DB_CR_PASSWORD": "...",
+  "DB_CR_CONNECT_TIMEOUT": "10"
+}
+```
+
+### Despliegue en QA
+
+Desde `C:\xampp\htdocs\lambdas\quotation-microservice`:
+
+```bash
+sam build --config-env qa
+sam deploy --config-env qa
+```
+
+### Despliegue en producción
+
+Ejecuta primero un build nuevo para evitar desplegar artefactos construidos para
+otro ambiente:
+
+```bash
+sam build --config-env prod
+sam deploy --config-env prod
+```
+
+Ambos comandos utilizan la región `us-east-2`, `CAPABILITY_IAM`, un bucket
+administrado por SAM y el template generado en `.aws-sam/build/template.yaml`.
+
+### API Keys y outputs
+
+Después del despliegue, SAM muestra las URLs de ese ambiente, el ID de la API
+Key, el Usage Plan y los nombres de las dos funciones. Para obtener el valor
+de una API Key:
+
+```bash
+aws apigateway get-api-key \
+  --api-key <API_KEY_ID> \
+  --include-value \
+  --region us-east-2
+```
+
+El cliente debe enviar la clave en el header `x-api-key`.
+
+### Validación y eliminación
+
+Valida la plantilla antes de desplegar:
+
+```bash
+sam validate --lint --template-file sam/template-quotation.yaml
+```
+
+Para eliminar un ambiente completo, incluyendo sus Lambdas, API Gateway, API
+Key, Usage Plan e IAM Role:
+
+```bash
+sam delete --stack-name amz-quotation-microservice-qa --region us-east-2
+sam delete --stack-name amz-quotation-microservice-prod --region us-east-2
+```
+
+Ejecuta únicamente el comando del ambiente que deseas eliminar y revisa el
+nombre real del stack antes de ejecutarlo.
 
 ## Extender a otro país
 
