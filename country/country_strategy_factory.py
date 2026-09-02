@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 
+from country.country_prefetched_strategy import CountryPrefetchedStrategy
 from country.country_strategy_abstract import CountryQuotationStrategy
 
 StrategyBuilder = Callable[[], CountryQuotationStrategy]
@@ -33,7 +34,8 @@ class CountryStrategyFactory:
             country: Requested country code.
 
         Returns:
-            CountryQuotationStrategy: Concrete country implementation.
+            CountryQuotationStrategy: Country implementation wrapped so
+                request-level reads can reuse a prefetched lookup.
 
         Raises:
             ValueError: If the country has no implementation.
@@ -42,7 +44,7 @@ class CountryStrategyFactory:
         builder = cls._builders.get(country.upper())
         if builder is None:
             raise ValueError(f"Unsupported country: {country}.")
-        return builder()
+        return CountryPrefetchedStrategy(builder())
 
     @classmethod
     def _register_defaults(cls) -> None:
