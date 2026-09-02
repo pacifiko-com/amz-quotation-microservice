@@ -13,7 +13,8 @@ from DTO.quotation_context_dto import (
     ResolvedPolicyDTO,
     SelectedOfferDTO,
 )
-from DTO.quotation_request_dto import ProductQuotationDTO
+from DTO.quotation_request_dto import PriceQuotationProductDTO, ProductQuotationDTO
+from service.price_quotation_service import PriceQuotationService
 from service.quotation_service import QuotationService
 
 
@@ -132,6 +133,59 @@ class QuotationPriceTests(unittest.TestCase):
         self.assertEqual(result.message, "Amazon offer is restricted.")
         self.assertEqual(result.offer_id, "offer-1")
         strategy.calculate.assert_not_called()
+
+    def test_direct_price_quotes_without_offer_selection(self) -> None:
+        """A known Amazon USD price is calculated without offers or promise."""
+        product = PriceQuotationProductDTO(
+            product_id=10,
+            amz_weight_kg=Decimal("1"),
+            unspsc="123",
+            amazon_price_usd=Decimal("100"),
+        )
+        strategy = Mock()
+        strategy.get_product_data.return_value = Mock(
+            weight_kg=Decimal("1"),
+            courier=False,
+            partida=None,
+        )
+        strategy.get_unspsc_data.return_value = Mock(
+            arancel_percentage=Decimal("0.1"),
+            restriction=0,
+            margin_percentage=Decimal("1.2"),
+            danger_good_active=False,
+            courier=False,
+        )
+        strategy.resolve_tariff_data.return_value = None
+        strategy.get_category_tree_courier.return_value = False
+        strategy.resolve_exchange_rate.return_value = Decimal("7.75")
+        strategy.calculate.return_value = CalculationResultDTO(
+            cost_usd=Decimal("80"),
+            price_local=Decimal("1000"),
+        )
+
+        result = PriceQuotationService()._quote_product(
+            strategy,
+            product,
+            CountrySettingsDTO(
+                {
+                    "margen": "1.2",
+                    "max_product_weight_kg": "100",
+                    "currency_code": "GTQ",
+                }
+            ),
+        )
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.amazon_price, Decimal("100"))
+        self.assertEqual(result.price_dolar, Decimal("100"))
+        self.assertEqual(result.cost_dolar, Decimal("80"))
+        self.assertEqual(result.cost_local, Decimal("620"))
+        self.assertEqual(result.price_local, Decimal("1000"))
+        self.assertEqual(result.special_price_dolar, Decimal("0"))
+        self.assertEqual(result.offer_id, "")
+        self.assertIsNone(result.delivery_promise_amz)
+        strategy.resolve_delivery_promise.assert_not_called()
+        strategy.calculate.assert_called_once()
 
     @staticmethod
     def _offer(
