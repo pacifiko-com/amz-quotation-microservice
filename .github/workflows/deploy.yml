@@ -1,0 +1,42 @@
+name: Deploy amz-quotation-microservice
+
+# PROD: automático en cada merge a main.
+# QA: manual (botón "Run workflow" desde cualquier branch). Siempre despliega a qa.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # requerido para OIDC
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # push a main -> prod ; dispatch manual -> qa
+    environment: ${{ github.event_name == 'push' && 'prod' || 'qa' }}
+    env:
+      TARGET_ENV: ${{ github.event_name == 'push' && 'prod' || 'qa' }}
+      AWS_REGION: us-east-2
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: SAM build & deploy
+        run: |
+          echo "Desplegando a: $TARGET_ENV"
+          sam build
+          sam deploy --no-confirm-changeset --no-fail-on-empty-changeset --config-env "$TARGET_ENV"
