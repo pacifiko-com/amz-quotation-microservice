@@ -236,42 +236,96 @@ class QuotationOrchestrator:
             ResolvedPolicyDTO: Combined import policy for the product.
         """
         # 1. Datos base: lo guardado en oc_product y la política del UNSPSC.
+        notes: list[str] = []
         product_data = strategy.get_product_data(product.product_id)
         if product.unspsc is None:
             unspsc_data = strategy.get_default_unspsc(settings)
+            notes.append(
+                "Producto no tiene UNSPSC; se usan valores por defecto de "
+                f"oc_setting ({_unspsc_summary(unspsc_data)}). "
+                "No se registra como desconocido."
+            )
         else:
             unspsc_data = strategy.get_unspsc_data(product.unspsc, settings)
             # Si no se encuentra el UNSPSC, se guarda y se obtiene el default
             if unspsc_data is None:
                 strategy.save_unknown_unspsc(product.unspsc)
                 unspsc_data = strategy.get_default_unspsc(settings)
+                notes.append(
+                    f"UNSPSC {product.unspsc} no encontrado en oc_arancel_amz; "
+                    "se almacena en desconocidos y se usan valores por defecto "
+                    f"de oc_setting ({_unspsc_summary(unspsc_data)})."
+                )
+            else:
+                notes.append(
+                    f"UNSPSC {product.unspsc} encontrado en oc_arancel_amz "
+                    f"({_unspsc_summary(unspsc_data)})."
+                )
 
         # 2. La partida del request manda sobre la almacenada en oc_product.
-        partida = product.pac_product_partida or product_data.partida
+        if product.pac_product_partida:
+            partida = product.pac_product_partida
+            notes.append(
+                f"Partida arancelaria {partida} tomada del override del request."
+            )
+        elif product_data.partida:
+            partida = product_data.partida
+            notes.append(f"Partida arancelaria {partida} tomada de oc_product.")
+        else:
+            partida = None
+            notes.append("Producto no tiene partida arancelaria asignada.")
         tariff_partida_data = strategy.resolve_tariff_data(partida)
+        if tariff_partida_data is not None:
+            notes.extend(tariff_partida_data.quotation_notes)
 
         # 3. Peso: el override del request reemplaza al de oc_product, y sobre
         # ese resultado se toma el mayor contra el peso de Amazon.
-        stored_weight = (
-            product.pac_product_weight
-            if product.pac_product_weight is not None
-            else product_data.weight_kg
-        )
+        if product.pac_product_weight is not None:
+            stored_weight = product.pac_product_weight
+            notes.append(
+                f"Peso Pacifiko tomado del override del request: {stored_weight}."
+            )
+        elif product_data.weight_kg is not None:
+            stored_weight = product_data.weight_kg
+            notes.append(f"Peso Pacifiko tomado de oc_product: {stored_weight}.")
+        else:
+            stored_weight = None
+            notes.append("No hay peso Pacifiko; se usa solo el peso Amazon.")
+        notes.append(f"Peso Amazon del request: {product.amz_weight_kg} kg.")
         weight = max(
             product.amz_weight_kg,
             stored_weight / _KG_TO_LB
             if stored_weight is not None
             else product.amz_weight_kg,
         )
+        notes.append(
+            f"Peso usado: {weight} kg (máximo entre Amazon y Pacifiko convertido)."
+        )
 
         # 4. Courier: se evalúa en cascada y una vez encendido ya no se apaga,
         # por eso cada fuente solo puede activarlo si la anterior no lo hizo.
-        product_courier = (
-            product.pac_product_courier
-            if product.pac_product_courier is not None
-            else product_data.courier
-        )
-        courier = product_courier if product_courier else unspsc_data.courier
+        if product.pac_product_courier is not None:
+            product_courier = product.pac_product_courier
+            notes.append(
+                f"Courier de producto tomado del override del request: "
+                f"{product_courier}."
+            )
+        else:
+            product_courier = product_data.courier
+            notes.append(
+                f"Courier de producto tomado de oc_product: {product_courier}."
+            )
+        if product_courier:
+            courier = product_courier
+            notes.append(
+                "Courier activado por producto; no se usa el courier UNSPSC."
+            )
+        else:
+            courier = unspsc_data.courier
+            notes.append(
+                "Courier de producto no activo; se usa courier UNSPSC: "
+                f"{courier}."
+            )
         arancel = unspsc_data.arancel_percentage
         restriction = unspsc_data.restriction
 
@@ -279,36 +333,87 @@ class QuotationOrchestrator:
         # con partida asignada, esa partida es la fuente autoritativa y
         # reemplaza al UNSPSC, pero solo en modo no courier
         if tariff_partida_data is not None:
-            courier = (
-                tariff_partida_data.courier
-                if tariff_partida_data.courier is not None
-                else courier
+            notes.append(
+                f"Partida {tariff_partida_data.partida} encontrada; "
+                f"courier de partida: {tariff_partida_data.courier}."
             )
+            if tariff_partida_data.courier is not None:
+                courier = tariff_partida_data.courier
+                notes.append(f"Courier tomado de la partida: {courier}.")
+            else:
+                notes.append(
+                    "Partida sin courier; se conserva el courier ya resuelto."
+                )
             if not courier:
                 if tariff_partida_data.arancel_percentage is not None:
                     arancel = tariff_partida_data.arancel_percentage
+                    notes.append(
+                        "Producto no es courier; arancel tomado de la partida: "
+                        f"{arancel}."
+                    )
+                else:
+                    notes.append(
+                        "Producto no es courier; partida sin arancel, se "
+                        f"conserva el UNSPSC: {arancel}."
+                    )
                 if tariff_partida_data.restriction is not None:
                     restriction = tariff_partida_data.restriction
+                    notes.append(
+                        "Producto no es courier; restricción tomada de la "
+                        f"partida: {restriction}."
+                    )
+                else:
+                    notes.append(
+                        "Producto no es courier; partida sin restricción, se "
+                        f"conserva el UNSPSC: {restriction}."
+                    )
+            else:
+                notes.append(
+                    "Producto es courier; arancel y restricción se conservan "
+                    f"del UNSPSC ({arancel}, restricción {restriction})."
+                )
         elif not courier:
             # Sin partida, el árbol de categorías es el último recurso para
             # determinar si el producto debe ir por courier.
             courier = strategy.get_category_tree_courier(product.product_id)
+            notes.append(
+                "Sin partida y courier aún apagado; courier del árbol de "
+                f"categorías: {courier}."
+            )
+        else:
+            notes.append(
+                "Sin partida; courier ya activo, no se consulta el árbol de "
+                "categorías."
+            )
 
         cabys = product_data.cabys
+        if unspsc_data.margin_percentage > 0:
+            margin = unspsc_data.margin_percentage
+            notes.append(f"Margen {margin} tomado de UNSPSC (oc_arancel_amz).")
+        else:
+            margin = settings.decimal("margen")
+            notes.append(
+                f"Margen UNSPSC no usable; se usa oc_setting margen: {margin}."
+            )
+        notes.append(
+            f"Mercancía peligrosa: {unspsc_data.danger_good_active} "
+            "(UNSPSC/defaults)."
+        )
+        sales_iva_rate, iva_notes = _unpack_sales_iva(
+            strategy.resolve_sales_iva_rate(cabys, settings)
+        )
+        notes.extend(iva_notes)
         return ResolvedPolicyDTO(
             weight_kg=weight,
             arancel_percentage=arancel,
-            margin_percentage=(
-                unspsc_data.margin_percentage
-                if unspsc_data.margin_percentage > 0
-                else settings.decimal("margen")
-            ),
+            margin_percentage=margin,
             courier=bool(courier),
             restriction=restriction,
             danger_good_active=unspsc_data.danger_good_active,
             partida=tariff_partida_data.partida if tariff_partida_data else partida,
-            sales_iva_rate=strategy.resolve_sales_iva_rate(cabys, settings),
+            sales_iva_rate=sales_iva_rate,
             cabys=cabys,
+            quotation_notes=tuple(notes),
         )
 
     @staticmethod
@@ -398,6 +503,7 @@ class QuotationOrchestrator:
         special_price_without_tax_local: Decimal | None = None,
         offer_id: str = "",
         delivery_promise_amz: int | None = None,
+        quotation_notes: Sequence[str] | None = None,
     ) -> ResultObjectDTO:
         """Build a successful priced result with the shared response fields.
 
@@ -423,10 +529,16 @@ class QuotationOrchestrator:
                 currency before sales VAT, or ``None``.
             offer_id: Selected Amazon offer identifier when applicable.
             delivery_promise_amz: Country promise tier when an offer exists.
+            quotation_notes: Extra decisions after policy resolution.
 
         Returns:
             ResultObjectDTO: Successful product quotation.
         """
+        notes = (
+            tuple(quotation_notes)
+            if quotation_notes is not None
+            else policy.quotation_notes
+        )
         return ResultObjectDTO(
             success=True,
             message="Product quoted successfully.",
@@ -451,6 +563,7 @@ class QuotationOrchestrator:
             restriction=policy.restriction,
             partida=policy.partida,
             cabys=policy.cabys,
+            quotation_notes=notes,
         )
 
 
@@ -478,6 +591,22 @@ def _response_from_results(
         message=message,
         result=results,
     )
+
+
+def _unspsc_summary(data: UnspscDataDTO) -> str:
+    """Format the UNSPSC fields already selected by the caller."""
+    return (
+        f"arancel {data.arancel_percentage}, courier {data.courier}, "
+        f"restricción {data.restriction}, margen {data.margin_percentage}, "
+        f"peligroso {data.danger_good_active}"
+    )
+
+
+def _unpack_sales_iva(value: object) -> tuple[Decimal, tuple[str, ...]]:
+    """Accept SalesIvaDTO or a bare Decimal from tests and Strategies."""
+    notes = getattr(value, "quotation_notes", None)
+    rate = getattr(value, "rate", value)
+    return rate, tuple(notes or ())
 
 
 def _unexpected_product_error_message(exc: BaseException) -> str:

@@ -9,6 +9,7 @@ from DTO.quotation_context_dto import (
     CalculationInputDTO,
     CalculationResultDTO,
     CountrySettingsDTO,
+    DeliveryPromiseDTO,
     SelectedOfferDTO,
 )
 from Utils.price_rounding import round_price
@@ -88,20 +89,30 @@ class CostaRicaQuotationService:
         policy = calculation.policy
         settings = calculation.settings
         amazon_price_usd = calculation.amazon_price_usd
+        notes: list[str] = []
         # El modo solo elige el prefijo de las keys; el resto del cálculo
         # sigue el mismo orden.
-        mode = "courier" if policy.courier else "poliza"
+        if policy.courier:
+            mode = "courier"
+            notes.append("Calculadora CR en modo courier (keys courier_*).")
+        else:
+            mode = "poliza"
+            notes.append("Calculadora CR en modo póliza (keys poliza_*).")
 
         # Las tarifas están expresadas por kilo, así que el peso se redondea
         # hacia arriba antes de multiplicar.
         weight_kg = policy.weight_kg.to_integral_value(rounding=ROUND_CEILING)
+        notes.append(f"Peso {policy.weight_kg} kg redondeado a {weight_kg} kg.")
 
         # Este componente es opcional y se apaga con un flag de configuración.
-        usa_tax = (
-            amazon_price_usd * settings.decimal("tax_usa_rate")
-            if settings.boolean("tax_usa")
-            else Decimal("0")
-        )
+        if settings.boolean("tax_usa"):
+            usa_tax = amazon_price_usd * settings.decimal("tax_usa_rate")
+            notes.append(
+                "Impuesto USA activo (tax_usa_rate sobre precio Amazon)."
+            )
+        else:
+            usa_tax = Decimal("0")
+            notes.append("Impuesto USA apagado (tax_usa=0).")
 
         # Este subtotal se calcula primero porque los tres pasos siguientes
         # lo reutilizan. Usa keys distintas a las del flete que va más abajo.
@@ -110,12 +121,18 @@ class CostaRicaQuotationService:
         )
         customs_freight = weight_kg * settings.decimal(f"{mode}_flete_aduana_kg")
         cif = amazon_price_usd + customs_insurance + customs_freight
+        notes.append(
+            f"CIF = Amazon + {mode}_seguro_aduanas + {mode}_flete_aduana_kg."
+        )
 
         # El orden importa: el segundo componente recibe el subtotal ya
         # incrementado por el primero.
         tariff = cif * policy.arancel_percentage
+        notes.append(f"Arancel {policy.arancel_percentage} sobre CIF.")
         customs_vat = (cif + tariff) * settings.decimal(f"{mode}_iva_aduanas")
+        notes.append(f"IVA aduanas desde {mode}_iva_aduanas.")
         law_6946 = cif * settings.decimal("ley_6946")
+        notes.append("Ley 6946 desde oc_setting ley_6946 sobre CIF.")
 
         # Estos componentes no reutilizan el subtotal anterior.
         real_freight = weight_kg * settings.decimal(f"{mode}_flete_kg")
@@ -123,6 +140,10 @@ class CostaRicaQuotationService:
         clearance = settings.decimal(f"{mode}_desaduanaje")
         freight_insurance = amazon_price_usd * settings.decimal(
             f"{mode}_seguro_flete"
+        )
+        notes.append(
+            f"Flete real {mode}_flete_kg, combustible {mode}_fee_combustible, "
+            f"desaduanaje {mode}_desaduanaje, seguro {mode}_seguro_flete."
         )
         base_cost = (
             amazon_price_usd
@@ -137,14 +158,24 @@ class CostaRicaQuotationService:
         )
         # Este cargo se suma después del margen, no antes: entra al costo y al
         # precio como monto fijo, pero no forma parte de la base multiplicada.
-        permit_fee = (
-            settings.decimal("courier_tramite_permisos")
-            if policy.courier
-            else Decimal("0")
-        )
+        if policy.courier:
+            permit_fee = settings.decimal("courier_tramite_permisos")
+            notes.append(
+                "Trámite courier_tramite_permisos sumado después del margen."
+            )
+        else:
+            permit_fee = Decimal("0")
         cost_usd = base_cost + permit_fee
+        notes.append(f"Margen aplicado: {policy.margin_percentage}.")
         price_without_iva_usd = base_cost * policy.margin_percentage + permit_fee
+        notes.append(
+            f"IVA de venta {policy.sales_iva_rate} (CABYS o default_iva_venta)."
+        )
         price_usd = price_without_iva_usd * (Decimal("1") + policy.sales_iva_rate)
+        notes.append(
+            f"Tasa de cambio {calculation.exchange_rate}; "
+            "precio local redondeado con price_rounding_step."
+        )
 
         # CR aplica el recargo sobre el total y convierte al final; GT
         # convierte el precio USD ya calculado.
@@ -157,6 +188,7 @@ class CostaRicaQuotationService:
             ),
             price_without_tax_usd=price_without_iva_usd,
             price_without_tax_local=price_without_iva_usd * calculation.exchange_rate,
+            quotation_notes=tuple(notes),
         )
 
     def resolve_delivery_promise(
@@ -164,7 +196,7 @@ class CostaRicaQuotationService:
         offer: SelectedOfferDTO,
         courier: bool,
         settings: CountrySettingsDTO,
-    ) -> int:
+    ) -> DeliveryPromiseDTO:
         """Map Amazon delivery text and courier mode to a CR promise tier.
 
         Args:
@@ -173,8 +205,9 @@ class CostaRicaQuotationService:
             settings: CR terms, thresholds and shift.
 
         Returns:
-            int: OpenCart Amazon promise tier.
+            DeliveryPromiseDTO: OpenCart Amazon promise tier and notes.
         """
+        notes: list[str] = []
         # La preventa se resuelve antes que nada porque no depende del texto de
         # entrega que se parsea más abajo.
         availability = offer.availability.casefold()
@@ -182,7 +215,12 @@ class CostaRicaQuotationService:
             term.casefold() in availability
             for term in settings.string_list("preorder_offer_terms")
         ):
-            return settings.integer("promise_preorder_tier")
+            tier = settings.integer("promise_preorder_tier")
+            notes.append(
+                f"Promesa CR: preventa por availability; tier {tier} "
+                "(promise_preorder_tier)."
+            )
+            return DeliveryPromiseDTO(tier=tier, quotation_notes=tuple(notes))
 
         # CR no recibe fecha estructurada sino el texto de entrega de Amazon,
         # así que los días se extraen del texto. "mañana" no trae número y se
@@ -193,31 +231,65 @@ class CostaRicaQuotationService:
             for term in settings.string_list("promise_tomorrow_terms")
         )
         days_match = re.search(r"\d+", text)
-        days = (
-            settings.integer("promise_tomorrow_days")
-            if tomorrow
-            else (int(days_match.group()) if days_match else None)
-        )
+        if tomorrow:
+            days = settings.integer("promise_tomorrow_days")
+            notes.append(
+                f"Promesa CR: texto de mañana; días={days} "
+                "(promise_tomorrow_days)."
+            )
+        elif days_match:
+            days = int(days_match.group())
+            notes.append(f"Promesa CR: días extraídos del texto de entrega: {days}.")
+        else:
+            days = None
+            notes.append("Promesa CR: el texto de entrega no trae días.")
 
         # El tipo de fulfillment solo selecciona el juego de umbrales a usar;
         # la comparación en cascada que sigue es la misma para ambos.
         is_af = offer.fulfillment_type == settings.require("amazon_fulfillment_type")
-        prefix = "af" if is_af else "mf"
+        if is_af:
+            prefix = "af"
+            notes.append("Promesa CR: umbrales Amazon fulfillment (af).")
+        else:
+            prefix = "mf"
+            notes.append("Promesa CR: umbrales merchant fulfillment (mf).")
         if days is None:
             tier = settings.integer(f"promise_missing_delivery_{prefix}_tier")
+            notes.append(
+                f"Promesa CR: sin días; tier {tier} "
+                f"(promise_missing_delivery_{prefix}_tier)."
+            )
         elif days < settings.integer(f"promise_{prefix}_tier_1_max_days"):
             tier = settings.integer("promise_tier_1_value")
+            notes.append(
+                f"Promesa CR: {days} días bajo umbral 1; tier {tier}."
+            )
         elif days < settings.integer(f"promise_{prefix}_tier_2_max_days"):
             tier = settings.integer("promise_tier_2_value")
+            notes.append(
+                f"Promesa CR: {days} días bajo umbral 2; tier {tier}."
+            )
         elif days < settings.integer(f"promise_{prefix}_tier_3_max_days"):
             tier = settings.integer("promise_tier_3_value")
+            notes.append(
+                f"Promesa CR: {days} días bajo umbral 3; tier {tier}."
+            )
         else:
             tier = settings.integer("promise_fallback_tier")
+            notes.append(
+                f"Promesa CR: {days} días sobre umbrales; "
+                f"tier {tier} (promise_fallback_tier)."
+            )
         # El modo courier desplaza el tier ya resuelto, con tope en el tier más
         # lento para que el desplazamiento no genere un valor inexistente.
         if courier:
-            tier = min(
+            shifted = min(
                 tier + settings.integer("courier_promise_shift"),
                 settings.integer("promise_fallback_tier"),
             )
-        return tier
+            notes.append(
+                f"Promesa CR courier: tier {tier} desplazado a {shifted} "
+                "(courier_promise_shift, tope promise_fallback_tier)."
+            )
+            tier = shifted
+        return DeliveryPromiseDTO(tier=tier, quotation_notes=tuple(notes))

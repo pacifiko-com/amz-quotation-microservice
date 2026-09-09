@@ -13,6 +13,7 @@ from DTO.quotation_context_dto import (
     EMPTY_PRODUCT_DATA,
     ProductDataDTO,
     QuotationLookupDTO,
+    SalesIvaDTO,
     SelectedOfferDTO,
     TariffDataDTO,
     UnspscDataDTO,
@@ -130,11 +131,29 @@ class CountryPrefetchedStrategy(CountryQuotationStrategy):
         """Use the prefetched CABYS rate when present; otherwise delegate."""
         default_rate = settings.decimal("default_iva_venta")
         if not cabys:
-            return default_rate
+            return SalesIvaDTO(
+                rate=default_rate,
+                quotation_notes=(
+                    "Sin CABYS; IVA de venta desde oc_setting "
+                    f"default_iva_venta ({default_rate}).",
+                ),
+            )
         if self._lookup is not None:
             if cabys in self._lookup.sales_iva:
-                return self._lookup.sales_iva[cabys]
-            return default_rate
+                rate = self._lookup.sales_iva[cabys]
+                return SalesIvaDTO(
+                    rate=rate,
+                    quotation_notes=(
+                        f"IVA de venta {rate} tomado de pac_cabys para CABYS {cabys}.",
+                    ),
+                )
+            return SalesIvaDTO(
+                rate=default_rate,
+                quotation_notes=(
+                    f"CABYS {cabys} no encontrado en pac_cabys; IVA de venta "
+                    f"desde oc_setting default_iva_venta ({default_rate}).",
+                ),
+            )
         return self._inner.resolve_sales_iva_rate(cabys, settings)
 
     def load_category_tree_courier_map(

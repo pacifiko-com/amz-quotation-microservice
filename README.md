@@ -149,7 +149,12 @@ Reglas de forma:
       "delivery_promise_amz": 1,
       "courier": false,
       "restriction": 0,
-      "partida": "0012.34"
+      "partida": "0012.34",
+      "quotation_notes": [
+        "UNSPSC 52161500 encontrado en oc_arancel_amz (arancel 0.15, courier False, restricción 0, margen 1.2, peligroso False).",
+        "Partida arancelaria 0012.34 tomada del override del request.",
+        "Producto no es courier; arancel tomado de la partida: 0.05."
+      ]
     }
   ]
 }
@@ -170,6 +175,9 @@ Reglas de forma:
 - `currency_code`: código ISO de la moneda local (`GTQ` o `CRC`).
 - `success` global es `true` solamente si todos los resultados son exitosos.
 - Se conserva `Message` con mayúscula dentro de cada resultado por contrato.
+- `quotation_notes`: arreglo de textos en cada producto cotizado con éxito. Cada
+  nota se escribe en el `if` que tomó la decisión (UNSPSC, partida, courier,
+  calculadora, oferta, special, promesa). En fallos el arreglo va vacío.
 
 ## Precedencia por país
 

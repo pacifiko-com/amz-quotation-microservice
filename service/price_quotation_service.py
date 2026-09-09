@@ -67,7 +67,16 @@ class PriceQuotationService:
         if failed is not None:
             return failed
 
+        notes = list(policy.quotation_notes)
+        notes.append(
+            f"Precio Amazon USD del request: {product.amazon_price_usd} "
+            "(sin selección de oferta)."
+        )
         exchange_rate = strategy.resolve_exchange_rate(settings)
+        notes.append(
+            f"Tasa de cambio {exchange_rate} (estrategia de país / "
+            "oc_setting tipo_de_cambio)."
+        )
         calculation = self._orchestrator.calculate(
             strategy,
             product.amazon_price_usd,
@@ -75,6 +84,7 @@ class PriceQuotationService:
             exchange_rate,
             settings,
         )
+        notes.extend(calculation.quotation_notes)
         return self._orchestrator.priced_success(
             product.product_id,
             policy,
@@ -86,4 +96,5 @@ class PriceQuotationService:
             calculation.price_local,
             calculation.price_without_tax_usd,
             calculation.price_without_tax_local,
+            quotation_notes=notes,
         )

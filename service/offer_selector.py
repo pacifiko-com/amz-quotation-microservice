@@ -35,6 +35,8 @@ class OfferSelector:
         """
         selected: dict[str, Any] | None = None
         shipping: dict[str, Any] = {}
+        selection_reason = ""
+        notes: list[str] = []
 
         # la primera elegible que tenga deliveryRange.max.
         # La opción de envío es la primera de esa oferta que trae max, no
@@ -48,6 +50,10 @@ class OfferSelector:
                 ):
                     selected = offer
                     shipping = self._first_shipping_with_max(offer)
+                    selection_reason = "primera elegible con deliveryRange.max"
+                    notes.append(
+                        "Oferta seleccionada: primera elegible con deliveryRange.max."
+                    )
                     break
 
         # Pasada intermedia, solo si el request la activa: primera elegible
@@ -59,6 +65,10 @@ class OfferSelector:
                 if self._is_eligible(offer, settings, require_amazon_fulfillment=True):
                     selected = offer
                     shipping = self._first_shipping_option(offer)
+                    selection_reason = "primera elegible AMAZON_FULFILLMENT"
+                    notes.append(
+                        "Oferta seleccionada: primera elegible AMAZON_FULFILLMENT."
+                    )
                     break
 
         # Última pasada: si nadie tenía max (ni AF cuando aplica), la primera
@@ -70,6 +80,8 @@ class OfferSelector:
                 if self._is_eligible(offer, settings):
                     selected = offer
                     shipping = self._first_shipping_option(offer)
+                    selection_reason = "primera oferta elegible"
+                    notes.append("Oferta seleccionada: primera oferta elegible.")
                     break
 
         if selected is None:
@@ -88,6 +100,11 @@ class OfferSelector:
             and fulfillment == settings.require("amazon_fulfillment_type")
         ):
             shipping_usd = Decimal("0")
+            notes.append(
+                "Shipping forzado a 0 por amazon_fulfillment_free_shipping "
+                "y fulfillment Amazon."
+            )
+        notes.append(f"Shipping USD {shipping_usd}; fulfillment {fulfillment or '(vacío)'}.")
 
         # El mismo shipping se suma al precio y al precio de lista, para que
         # ambas bases de cálculo queden en la misma unidad.
@@ -98,13 +115,19 @@ class OfferSelector:
         list_price = self._optional_amount(
             _nested(selected, "listPrice", "value", "amount")
         )
+        if list_price is not None:
+            notes.append(f"List price Amazon {list_price} USD; se suma el shipping.")
+        else:
+            notes.append("Sin list price; un solo cálculo sobre la oferta.")
+        offer_id = str(
+            selected.get("offerId")
+            or selected.get("offer_id")
+            or selected.get("id")
+            or ""
+        )
+        notes.append(f"Oferta {offer_id or '(sin id)'} seleccionada ({selection_reason}).")
         return SelectedOfferDTO(
-            offer_id=str(
-                selected.get("offerId")
-                or selected.get("offer_id")
-                or selected.get("id")
-                or ""
-            ),
+            offer_id=offer_id,
             price_usd=price + shipping_usd,
             list_price_usd=(
                 list_price + shipping_usd if list_price is not None else None
@@ -121,6 +144,8 @@ class OfferSelector:
             buying_guidance_type=str(
                 _nested(selected, "buyingGuidanceV2", "buyingGuidance", 0, "type") or ""
             ),
+            selection_reason=selection_reason,
+            quotation_notes=tuple(notes),
         )
 
     def _is_eligible(

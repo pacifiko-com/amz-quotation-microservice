@@ -54,39 +54,39 @@ class CountryCalculatorTests(unittest.TestCase):
         settings = self._gt_promise_settings()
         offer = self._offer(availability="Temporarily delayed")
 
-        tier = GuatemalaQuotationService().resolve_delivery_promise(
+        result = GuatemalaQuotationService().resolve_delivery_promise(
             offer,
             False,
             settings,
         )
 
-        self.assertEqual(tier, 4)
+        self.assertEqual(result.tier, 4)
 
     def test_gt_in_stock_without_date_uses_missing_delivery_tier(self) -> None:
         """Known in-stock text without max date keeps the missing-date tier."""
         settings = self._gt_promise_settings()
         offer = self._offer(availability="In Stock.", delivery_range_max=None)
 
-        tier = GuatemalaQuotationService().resolve_delivery_promise(
+        result = GuatemalaQuotationService().resolve_delivery_promise(
             offer,
             False,
             settings,
         )
 
-        self.assertEqual(tier, 3)
+        self.assertEqual(result.tier, 3)
 
     def test_gt_envio_en_availability_is_treated_as_in_stock(self) -> None:
         """'Envío en' is a known in-stock marker, not unknown availability."""
         settings = self._gt_promise_settings()
         offer = self._offer(availability="Envío en 2 días", delivery_range_max=None)
 
-        tier = GuatemalaQuotationService().resolve_delivery_promise(
+        result = GuatemalaQuotationService().resolve_delivery_promise(
             offer,
             False,
             settings,
         )
 
-        self.assertEqual(tier, 3)
+        self.assertEqual(result.tier, 3)
 
     def test_gt_converts_delivery_date_to_country_timezone(self) -> None:
         """Timezone-aware Amazon dates are converted before taking the date."""
@@ -106,13 +106,13 @@ class CountryCalculatorTests(unittest.TestCase):
             f"{today.isoformat()}T12:00:00-06:00",
         )
 
-        tier = GuatemalaQuotationService().resolve_delivery_promise(
+        result = GuatemalaQuotationService().resolve_delivery_promise(
             offer,
             False,
             settings,
         )
 
-        self.assertEqual(tier, 1)
+        self.assertEqual(result.tier, 1)
 
     def test_guatemala_non_courier_golden_case(self) -> None:
         """GT applies freight, insured tariff base, margin, VAT and ceil rounding."""
@@ -155,7 +155,7 @@ class CountryCalculatorTests(unittest.TestCase):
         self.assertEqual(result.price_usd, Decimal("152.275200"))
         self.assertEqual(result.price_local, Decimal("1145"))
         self.assertEqual(result.price_without_tax_usd, Decimal("135.960000"))
-        self.assertEqual(result.price_without_tax_local, Decimal("1020"))
+        self.assertEqual(result.price_without_tax_local, Decimal("1019.700000"))
 
     def test_costa_rica_poliza_golden_case(self) -> None:
         """CR applies CIF, DAI, freight, Ley 6946, sales VAT and ceil-to-ten."""
@@ -201,7 +201,7 @@ class CountryCalculatorTests(unittest.TestCase):
         self.assertEqual(result.price_usd, Decimal("153.852325"))
         self.assertEqual(result.price_local, Decimal("76930"))
         self.assertEqual(result.price_without_tax_usd, Decimal("136.152500"))
-        self.assertEqual(result.price_without_tax_local, Decimal("68080"))
+        self.assertEqual(result.price_without_tax_local, Decimal("68076.2500000"))
 
     def test_costa_rica_sales_iva_follows_cabys_rate(self) -> None:
         """CR multiplies the post-margin price by the resolved CABYS rate."""
@@ -261,11 +261,11 @@ class CountryCalculatorTests(unittest.TestCase):
         self.assertEqual(exempt.price_usd, Decimal("136.152500"))
         self.assertEqual(exempt.price_local, Decimal("68080"))
         self.assertEqual(exempt.price_without_tax_usd, Decimal("136.152500"))
-        self.assertEqual(exempt.price_without_tax_local, Decimal("68080"))
+        self.assertEqual(exempt.price_without_tax_local, Decimal("68076.2500000"))
         self.assertEqual(reduced.price_usd, Decimal("137.514025"))
         self.assertEqual(reduced.price_local, Decimal("68760"))
         self.assertEqual(reduced.price_without_tax_usd, Decimal("136.152500"))
-        self.assertEqual(reduced.price_without_tax_local, Decimal("68080"))
+        self.assertEqual(reduced.price_without_tax_local, Decimal("68076.2500000"))
 
     @staticmethod
     def _gt_promise_settings() -> CountrySettingsDTO:

@@ -269,6 +269,7 @@ class QuotationPriceTests(unittest.TestCase):
                 "restriction",
                 "partida",
                 "cabys",
+                "quotation_notes",
                 "success",
                 "Message",
             ],

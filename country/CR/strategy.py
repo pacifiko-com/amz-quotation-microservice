@@ -17,6 +17,7 @@ from DTO.quotation_context_dto import (
     CalculationResultDTO,
     CountrySettingsDTO,
     ProductDataDTO,
+    SalesIvaDTO,
     SelectedOfferDTO,
     TariffDataDTO,
     UnspscDataDTO,
@@ -189,11 +190,29 @@ class CostaRicaQuotationStrategy(CountryQuotationStrategy):
         """
         default_rate = settings.decimal("default_iva_venta")
         if not cabys:
-            return default_rate
+            return SalesIvaDTO(
+                rate=default_rate,
+                quotation_notes=(
+                    "Sin CABYS; IVA de venta desde oc_setting "
+                    f"default_iva_venta ({default_rate}).",
+                ),
+            )
         rates = self._repository.get_cabys_tax_rates((cabys,))
         if cabys in rates:
-            return rates[cabys]
-        return default_rate
+            rate = rates[cabys]
+            return SalesIvaDTO(
+                rate=rate,
+                quotation_notes=(
+                    f"IVA de venta {rate} tomado de pac_cabys para CABYS {cabys}.",
+                ),
+            )
+        return SalesIvaDTO(
+            rate=default_rate,
+            quotation_notes=(
+                f"CABYS {cabys} no encontrado en pac_cabys; IVA de venta "
+                f"desde oc_setting default_iva_venta ({default_rate}).",
+            ),
+        )
 
     def load_category_tree_courier_map(
         self,
@@ -234,6 +253,7 @@ class CostaRicaQuotationStrategy(CountryQuotationStrategy):
         if tariff is None:
             return None
 
+        notes: list[str] = []
         # CR no guarda un arancel único como GT, sino DAI e ISC por separado.
         # Aquí se suman para exponer el mismo campo que espera el flujo común,
         # conservando los valores originales para trazabilidad. Si ambos vienen
@@ -242,6 +262,14 @@ class CostaRicaQuotationStrategy(CountryQuotationStrategy):
         arancel = None
         if tariff.dai is not None or tariff.isc is not None:
             arancel = (tariff.dai or Decimal("0")) + (tariff.isc or Decimal("0"))
+            notes.append(
+                f"Arancel de partida = DAI ({tariff.dai}) + ISC ({tariff.isc}) "
+                f"= {arancel}."
+            )
+        else:
+            notes.append(
+                "Partida CR sin DAI/ISC; el arancel se conservará del UNSPSC."
+            )
         return TariffDataDTO(
             partida=tariff.partida,
             arancel_percentage=arancel,
@@ -249,6 +277,7 @@ class CostaRicaQuotationStrategy(CountryQuotationStrategy):
             isc=tariff.isc,
             courier=tariff.courier,
             restriction=tariff.restriction,
+            quotation_notes=tuple(notes),
         )
 
     def get_category_tree_courier(self, product_id: int) -> bool:

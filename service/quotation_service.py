@@ -7,6 +7,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from country.country_strategy_abstract import CountryQuotationStrategy
 from DTO.quotation_context_dto import (
     CountrySettingsDTO,
+    DeliveryPromiseDTO,
     ResolvedPolicyDTO,
     ResolvedPricesDTO,
     SelectedOfferDTO,
@@ -87,6 +88,7 @@ class QuotationService:
 
         # 7. Oferta, tasa y cálculo. La oferta se elige con reglas compartidas;
         # la fórmula la aplica cada país sobre el mismo DTO de entrada.
+        notes = list(policy.quotation_notes)
         offer = self._offer_selector.select(
             product.amz_offers,
             settings,
@@ -105,6 +107,10 @@ class QuotationService:
             )
 
         exchange_rate = strategy.resolve_exchange_rate(settings)
+        notes.append(
+            f"Tasa de cambio {exchange_rate} (estrategia de país / "
+            "oc_setting tipo_de_cambio)."
+        )
         prices = self._resolve_prices(
             strategy,
             offer,
@@ -112,11 +118,16 @@ class QuotationService:
             exchange_rate,
             settings,
         )
-        promise = strategy.resolve_delivery_promise(
-            offer,
-            policy.courier,
-            settings,
+        promise = _unpack_promise(
+            strategy.resolve_delivery_promise(
+                offer,
+                policy.courier,
+                settings,
+            )
         )
+        notes.extend(offer.quotation_notes)
+        notes.extend(prices.quotation_notes)
+        notes.extend(promise.quotation_notes)
         return self._orchestrator.priced_success(
             product.product_id,
             policy,
@@ -134,7 +145,8 @@ class QuotationService:
             special_price_without_tax_dolar=prices.special_price_without_tax_usd,
             special_price_without_tax_local=prices.special_price_without_tax_local,
             offer_id=offer.offer_id,
-            delivery_promise_amz=promise,
+            delivery_promise_amz=promise.tier,
+            quotation_notes=notes,
         )
 
     @staticmethod
@@ -192,8 +204,12 @@ class QuotationService:
             exchange_rate,
             settings,
         )
+        calc_notes = list(offer_calc.quotation_notes)
         # Sin precio de lista no hay segunda corrida: un solo cálculo.
         if offer.list_price_usd is None or offer.list_price_usd <= 0:
+            calc_notes.append(
+                "Special no aplica: no hay list price o es menor o igual a 0."
+            )
             return ResolvedPricesDTO(
                 amazon_price=offer.price_usd,
                 special_amazon_price=None,
@@ -206,6 +222,7 @@ class QuotationService:
                 special_price_local=None,
                 special_price_without_tax_usd=None,
                 special_price_without_tax_local=None,
+                quotation_notes=tuple(calc_notes),
             )
 
         # El umbral se compara sobre los precios locales ya calculados, no
@@ -218,6 +235,9 @@ class QuotationService:
             settings,
         )
         if list_calc.price_local <= 0:
+            calc_notes.append(
+                "Special no aplica: el precio local de lista es 0 o negativo."
+            )
             return ResolvedPricesDTO(
                 amazon_price=offer.price_usd,
                 special_amazon_price=None,
@@ -230,6 +250,7 @@ class QuotationService:
                 special_price_local=None,
                 special_price_without_tax_usd=None,
                 special_price_without_tax_local=None,
+                quotation_notes=tuple(calc_notes),
             )
 
         discount_pct = (
@@ -241,6 +262,10 @@ class QuotationService:
             settings.decimal("special_discount_threshold") * Decimal("100")
         ).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
         if discount_pct < threshold_pct:
+            calc_notes.append(
+                f"Special no aplicado: descuento local {discount_pct}% "
+                f"< umbral {threshold_pct}% (special_discount_threshold)."
+            )
             return ResolvedPricesDTO(
                 amazon_price=offer.price_usd,
                 special_amazon_price=None,
@@ -253,7 +278,12 @@ class QuotationService:
                 special_price_local=None,
                 special_price_without_tax_usd=None,
                 special_price_without_tax_local=None,
+                quotation_notes=tuple(calc_notes),
             )
+        calc_notes.append(
+            f"Special aplicado: descuento local {discount_pct}% >= umbral "
+            f"{threshold_pct}% (special_discount_threshold)."
+        )
         return ResolvedPricesDTO(
             amazon_price=offer.list_price_usd,
             special_amazon_price=offer.price_usd,
@@ -266,4 +296,12 @@ class QuotationService:
             special_price_local=offer_calc.price_local,
             special_price_without_tax_usd=offer_calc.price_without_tax_usd,
             special_price_without_tax_local=offer_calc.price_without_tax_local,
+            quotation_notes=tuple(calc_notes),
         )
+
+
+def _unpack_promise(value: object) -> DeliveryPromiseDTO:
+    """Accept DeliveryPromiseDTO or a bare tier from tests."""
+    notes = getattr(value, "quotation_notes", None)
+    tier = getattr(value, "tier", value)
+    return DeliveryPromiseDTO(tier=tier, quotation_notes=tuple(notes or ()))

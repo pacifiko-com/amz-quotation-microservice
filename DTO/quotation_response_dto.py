@@ -46,6 +46,7 @@ class ResultObjectDTO:
         restriction: Resolved import restriction.
         partida: Resolved tariff code, when available.
         cabys: Resolved CABYS code, when available.
+        quotation_notes: Decision trail for a successful quotation.
     """
 
     success: bool
@@ -71,6 +72,7 @@ class ResultObjectDTO:
     restriction: int | None = None
     partida: str | None = None
     cabys: str | None = None
+    quotation_notes: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the product result using the public field names.
@@ -105,6 +107,7 @@ class ResultObjectDTO:
             "restriction": self.restriction,
             "partida": self.partida,
             "cabys": self.cabys,
+            "quotation_notes": list(self.quotation_notes),
             "success": self.success,
             "Message": self.message,
         }

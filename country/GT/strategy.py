@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import replace
 from decimal import Decimal
 
 from country.country_strategy_abstract import CountryQuotationStrategy
@@ -19,6 +20,7 @@ from DTO.quotation_context_dto import (
     CalculationResultDTO,
     CountrySettingsDTO,
     ProductDataDTO,
+    SalesIvaDTO,
     SelectedOfferDTO,
     TariffDataDTO,
     UnspscDataDTO,
@@ -159,7 +161,10 @@ class GuatemalaQuotationStrategy(CountryQuotationStrategy):
         Returns:
             dict[str, TariffDataDTO]: Existing tariff policy keyed by code.
         """
-        return self._repository.get_tariffs(partidas)
+        return {
+            partida: _annotate_gt_tariff(tariff)
+            for partida, tariff in self._repository.get_tariffs(partidas).items()
+        }
 
     def load_sales_iva_map(self, codes: Sequence[str]) -> dict[str, Decimal]:
         """Guatemala does not resolve sales VAT from a CABYS catalog.
@@ -188,7 +193,13 @@ class GuatemalaQuotationStrategy(CountryQuotationStrategy):
             Decimal: Sales-VAT rate used by ``calculate()``.
         """
         del cabys
-        return settings.decimal("default_iva_venta")
+        rate = settings.decimal("default_iva_venta")
+        return SalesIvaDTO(
+            rate=rate,
+            quotation_notes=(
+                f"IVA de venta GT desde oc_setting default_iva_venta ({rate}).",
+            ),
+        )
 
     def load_category_tree_courier_map(
         self,
@@ -213,7 +224,7 @@ class GuatemalaQuotationStrategy(CountryQuotationStrategy):
         Returns:
             TariffDataDTO | None: Normalized tariff policy.
         """
-        return self._repository.get_tariff(partida)
+        return _annotate_gt_tariff(self._repository.get_tariff(partida))
 
     def get_category_tree_courier(self, product_id: int) -> bool:
         """Resolve GT courier from the product category tree.
@@ -267,3 +278,17 @@ class GuatemalaQuotationStrategy(CountryQuotationStrategy):
             int: Delivery promise tier.
         """
         return self._service.resolve_delivery_promise(offer, courier, settings)
+
+
+def _annotate_gt_tariff(tariff: TariffDataDTO | None) -> TariffDataDTO | None:
+    """Attach the lookup note at the GT tariff resolution site."""
+    if tariff is None:
+        return None
+    return replace(
+        tariff,
+        quotation_notes=(
+            f"Partida {tariff.partida} cargada de oc_partida_arancelaria "
+            f"(arancel {tariff.arancel_percentage}, courier {tariff.courier}, "
+            f"restricción {tariff.restriction}).",
+        ),
+    )

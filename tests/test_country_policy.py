@@ -155,6 +155,9 @@ class CountryPolicyTests(unittest.TestCase):
         )
 
         self.assertEqual(policy.arancel_percentage, Decimal("0.25"))
+        self.assertTrue(
+            any("no tiene UNSPSC" in note for note in policy.quotation_notes)
+        )
         strategy.get_unspsc_data.assert_not_called()
         strategy.save_unknown_unspsc.assert_not_called()
         strategy.get_default_unspsc.assert_called_once()

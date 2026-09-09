@@ -39,6 +39,7 @@ class TariffDataDTO:
     isc: Decimal | None = None
     courier: bool | None = None
     restriction: int | None = None
+    quotation_notes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -166,6 +167,8 @@ class SelectedOfferDTO:
     buying_guidance: str = ""
     buying_guidance_title: str = ""
     buying_guidance_type: str = ""
+    selection_reason: str = ""
+    quotation_notes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -181,6 +184,7 @@ class ResolvedPolicyDTO:
     partida: str | None
     sales_iva_rate: Decimal
     cabys: str | None = None
+    quotation_notes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -219,6 +223,7 @@ class ResolvedPricesDTO:
     special_price_local: Decimal | None
     special_price_without_tax_usd: Decimal | None
     special_price_without_tax_local: Decimal | None
+    quotation_notes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -230,6 +235,23 @@ class CalculationResultDTO:
     price_local: Decimal
     price_without_tax_usd: Decimal
     price_without_tax_local: Decimal
+    quotation_notes: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class SalesIvaDTO:
+    """Sales-VAT rate plus the note written at the resolution site."""
+
+    rate: Decimal
+    quotation_notes: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class DeliveryPromiseDTO:
+    """Promise tier plus the notes written at each promise branch."""
+
+    tier: int
+    quotation_notes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
