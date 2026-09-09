@@ -109,6 +109,34 @@ class CountryPrefetchedStrategy(CountryQuotationStrategy):
         """Delegate the batched tariff read to the country Strategy."""
         return self._inner.load_tariffs(partidas)
 
+    def load_sales_iva_map(self, codes: Sequence[str]) -> dict[str, Decimal]:
+        """Return prefetched sales-VAT rates or ask the country Strategy."""
+        if self._lookup is not None:
+            requested = tuple(dict.fromkeys(code for code in codes if code))
+            if not requested:
+                return {}
+            return {
+                code: rate
+                for code, rate in self._lookup.sales_iva.items()
+                if code in requested
+            }
+        return self._inner.load_sales_iva_map(codes)
+
+    def resolve_sales_iva_rate(
+        self,
+        cabys: str | None,
+        settings: CountrySettingsDTO,
+    ) -> Decimal:
+        """Use the prefetched CABYS rate when present; otherwise delegate."""
+        default_rate = settings.decimal("default_iva_venta")
+        if not cabys:
+            return default_rate
+        if self._lookup is not None:
+            if cabys in self._lookup.sales_iva:
+                return self._lookup.sales_iva[cabys]
+            return default_rate
+        return self._inner.resolve_sales_iva_rate(cabys, settings)
+
     def load_category_tree_courier_map(
         self,
         product_ids: Sequence[int],

@@ -101,7 +101,7 @@ class GuatemalaQuotationService:
         tariff_usd = tariff_base * policy.arancel_percentage
 
         # Este componente solo entra cuando courier es true; si no, queda en 0.
-        import_vat = (
+        import_iva = (
             (tariff_base + tariff_usd) * settings.decimal("iva_importacion")
             if policy.courier
             else Decimal("0")
@@ -115,26 +115,26 @@ class GuatemalaQuotationService:
             amazon_price_usd
             + customs_clearance
             + tariff_usd
-            + import_vat
+            + import_iva
             + freight_usd
             + danger_usd
         )
 
-        price_without_vat_usd = cost_usd * policy.margin_percentage
+        price_without_iva_usd = cost_usd * policy.margin_percentage
         # Courier arma esta base sumando componentes; no courier reutiliza
         # el precio con margen que ya se calculó arriba.
         if policy.courier:
             margin_markup = max(policy.margin_percentage - Decimal("1"), Decimal("0"))
-            vat_base_usd = (
+            iva_base_usd = (
                 freight_usd
                 + cost_usd * margin_markup
                 + customs_clearance
                 + danger_usd
             )
         else:
-            vat_base_usd = price_without_vat_usd
-        price_usd = price_without_vat_usd + (
-            vat_base_usd * settings.decimal("default_iva_venta")
+            iva_base_usd = price_without_iva_usd
+        price_usd = price_without_iva_usd + (
+            iva_base_usd * settings.decimal("default_iva_venta")
         )
         return CalculationResultDTO(
             cost_usd=cost_usd,

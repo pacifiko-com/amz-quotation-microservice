@@ -208,6 +208,36 @@ class CountryQuotationStrategy(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def load_sales_iva_map(self, codes: Sequence[str]) -> dict[str, Decimal]:
+        """Load sales-VAT rates keyed by country classification code.
+
+        Args:
+            codes: Product classification codes used to resolve sales VAT.
+
+        Returns:
+            dict[str, Decimal]: Known rates. Missing codes use the country
+                default later.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def resolve_sales_iva_rate(
+        self,
+        cabys: str | None,
+        settings: CountrySettingsDTO,
+    ) -> Decimal:
+        """Return the sales-VAT rate for one product classification.
+
+        Args:
+            cabys: Optional country classification used for sales VAT.
+            settings: Fallback rate from ``oc_setting``.
+
+        Returns:
+            Decimal: Rate applied by the country calculator.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def resolve_delivery_promise(
         self,
         offer: SelectedOfferDTO,

@@ -59,6 +59,10 @@ class _RestrictedStrategy:
         """A tariff prevents category-tree refinement."""
         raise AssertionError("Category tree must not run when GT has a tariff.")
 
+    def resolve_sales_iva_rate(self, cabys, settings):
+        """Return a dummy rate; this test fails before the calculator."""
+        return Decimal("0.12")
+
 
 class CountryPolicyTests(unittest.TestCase):
     """Verify source precedence before the calculators execute."""
@@ -136,6 +140,7 @@ class CountryPolicyTests(unittest.TestCase):
         strategy.get_default_unspsc.return_value = default
         strategy.resolve_tariff_data.return_value = None
         strategy.get_category_tree_courier.return_value = False
+        strategy.resolve_sales_iva_rate.return_value = Decimal("0.13")
         product = ProductQuotationDTO(
             product_id=10,
             amz_weight_kg=Decimal("1"),

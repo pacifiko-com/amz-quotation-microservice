@@ -243,7 +243,7 @@ Verificadas contra `lectura-qa-cr`.
 | `currency_code` | CR | Código ISO de moneda local | Nueva |
 | `margen` | CR | Margen fallback | Existente |
 | `default_arancel` | CR | Arancel fallback | Existente |
-| `default_iva_venta` | CR | IVA de venta fallback | Existente |
+| `default_iva_venta` | CR | IVA de venta fallback si no hay CABYS | Existente |
 | `tax_usa` | CR | Activa impuesto USA | Existente |
 | `ley_6946` | CR | Tasa Ley 6946 | Existente |
 | `courier_iva_aduanas` | CR | IVA aduanas courier | Existente |

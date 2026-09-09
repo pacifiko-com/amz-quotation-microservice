@@ -161,6 +161,35 @@ class GuatemalaQuotationStrategy(CountryQuotationStrategy):
         """
         return self._repository.get_tariffs(partidas)
 
+    def load_sales_iva_map(self, codes: Sequence[str]) -> dict[str, Decimal]:
+        """Guatemala does not resolve sales VAT from a CABYS catalog.
+
+        Args:
+            codes: Unused classification codes.
+
+        Returns:
+            dict[str, Decimal]: Empty map; the calculator uses the setting.
+        """
+        del codes
+        return {}
+
+    def resolve_sales_iva_rate(
+        self,
+        cabys: str | None,
+        settings: CountrySettingsDTO,
+    ) -> Decimal:
+        """Return the configured Guatemala sales-VAT rate.
+
+        Args:
+            cabys: Unused in Guatemala.
+            settings: ``default_iva_venta`` from ``oc_setting``.
+
+        Returns:
+            Decimal: Sales-VAT rate used by ``calculate()``.
+        """
+        del cabys
+        return settings.decimal("default_iva_venta")
+
     def load_category_tree_courier_map(
         self,
         product_ids: Sequence[int],

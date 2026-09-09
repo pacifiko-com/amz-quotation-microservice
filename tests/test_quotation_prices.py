@@ -50,6 +50,7 @@ class QuotationPriceTests(unittest.TestCase):
             restriction=0,
             danger_good_active=False,
             partida=None,
+            sales_iva_rate=Decimal("0.12"),
         )
 
     def test_special_uses_local_prices_and_keeps_offer_cost(self) -> None:
@@ -112,6 +113,7 @@ class QuotationPriceTests(unittest.TestCase):
             weight_kg=Decimal("1"),
             courier=False,
             partida=None,
+            cabys=None,
         )
         strategy.get_unspsc_data.return_value = Mock(
             arancel_percentage=Decimal("0.1"),
@@ -122,6 +124,7 @@ class QuotationPriceTests(unittest.TestCase):
         )
         strategy.resolve_tariff_data.return_value = None
         strategy.get_category_tree_courier.return_value = False
+        strategy.resolve_sales_iva_rate.return_value = Decimal("0.12")
 
         result = QuotationService(offer_selector=selector)._quote_product(
             strategy,
@@ -153,6 +156,7 @@ class QuotationPriceTests(unittest.TestCase):
             weight_kg=Decimal("1"),
             courier=False,
             partida=None,
+            cabys=None,
         )
         strategy.get_unspsc_data.return_value = Mock(
             arancel_percentage=Decimal("0.1"),
@@ -163,6 +167,7 @@ class QuotationPriceTests(unittest.TestCase):
         )
         strategy.resolve_tariff_data.return_value = None
         strategy.get_category_tree_courier.return_value = False
+        strategy.resolve_sales_iva_rate.return_value = Decimal("0.12")
         strategy.resolve_exchange_rate.return_value = Decimal("7.75")
         strategy.calculate.return_value = CalculationResultDTO(
             cost_usd=Decimal("80"),
@@ -217,6 +222,7 @@ class QuotationPriceTests(unittest.TestCase):
             courier=False,
             restriction=0,
             partida="0012",
+            cabys="1234567890123",
         ).to_dict()
 
         self.assertEqual(
@@ -238,6 +244,7 @@ class QuotationPriceTests(unittest.TestCase):
                 "courier",
                 "restriction",
                 "partida",
+                "cabys",
                 "success",
                 "Message",
             ],

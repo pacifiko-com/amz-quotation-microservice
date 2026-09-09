@@ -117,6 +117,11 @@ class QuotationOrchestrator:
             if partida:
                 partidas.append(partida)
         tariffs = strategy.load_tariffs(partidas)
+        cabys_codes = tuple(
+            stored.cabys
+            for stored in products_map.values()
+            if stored.cabys
+        )
 
         need_category: list[int] = []
         for item in products:
@@ -142,6 +147,7 @@ class QuotationOrchestrator:
                 if need_category
                 else {}
             ),
+            sales_iva=strategy.load_sales_iva_map(cabys_codes),
         )
 
     @staticmethod
@@ -288,6 +294,7 @@ class QuotationOrchestrator:
             # determinar si el producto debe ir por courier.
             courier = strategy.get_category_tree_courier(product.product_id)
 
+        cabys = product_data.cabys
         return ResolvedPolicyDTO(
             weight_kg=weight,
             arancel_percentage=arancel,
@@ -300,6 +307,8 @@ class QuotationOrchestrator:
             restriction=restriction,
             danger_good_active=unspsc_data.danger_good_active,
             partida=tariff_partida_data.partida if tariff_partida_data else partida,
+            sales_iva_rate=strategy.resolve_sales_iva_rate(cabys, settings),
+            cabys=cabys,
         )
 
     @staticmethod
@@ -337,6 +346,7 @@ class QuotationOrchestrator:
             courier=policy.courier,
             restriction=policy.restriction,
             partida=policy.partida,
+            cabys=policy.cabys,
         )
 
     @staticmethod
@@ -424,6 +434,7 @@ class QuotationOrchestrator:
             courier=policy.courier,
             restriction=policy.restriction,
             partida=policy.partida,
+            cabys=policy.cabys,
         )
 
 

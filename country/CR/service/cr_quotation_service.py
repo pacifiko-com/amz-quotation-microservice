@@ -143,8 +143,8 @@ class CostaRicaQuotationService:
             else Decimal("0")
         )
         cost_usd = base_cost + permit_fee
-        sale_usd = base_cost * policy.margin_percentage + permit_fee
-        price_usd = sale_usd * (Decimal("1") + settings.decimal("default_iva_venta"))
+        price_without_iva_usd = base_cost * policy.margin_percentage + permit_fee
+        price_usd = price_without_iva_usd * (Decimal("1") + policy.sales_iva_rate)
 
         # CR aplica el recargo sobre el total y convierte al final; GT
         # convierte el precio USD ya calculado.

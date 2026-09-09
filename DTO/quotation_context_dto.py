@@ -14,6 +14,7 @@ class ProductDataDTO:
     weight_kg: Decimal | None
     courier: bool | None
     partida: str | None
+    cabys: str | None = None
 
 
 @dataclass(frozen=True)
@@ -144,6 +145,7 @@ class QuotationLookupDTO:
     unspsc: dict[str, UnspscDataDTO | None]
     tariffs: dict[str, TariffDataDTO]
     category_courier: dict[int, bool]
+    sales_iva: dict[str, Decimal]
 
 
 EMPTY_PRODUCT_DATA = ProductDataDTO(weight_kg=None, courier=None, partida=None)
@@ -177,6 +179,8 @@ class ResolvedPolicyDTO:
     restriction: int
     danger_good_active: bool
     partida: str | None
+    sales_iva_rate: Decimal
+    cabys: str | None = None
 
 
 @dataclass(frozen=True)

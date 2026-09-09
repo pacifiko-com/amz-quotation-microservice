@@ -162,6 +162,39 @@ class CostaRicaQuotationStrategy(CountryQuotationStrategy):
             for partida, tariff in self._repository.get_tariffs(partidas).items()
         }
 
+    def load_sales_iva_map(self, codes: Sequence[str]) -> dict[str, Decimal]:
+        """Load Costa Rica CABYS sales-VAT rates for the whole request.
+
+        Args:
+            codes: CABYS identifiers assigned to products.
+
+        Returns:
+            dict[str, Decimal]: Known ``pac_cabys.tax_rate`` values.
+        """
+        return self._repository.get_cabys_tax_rates(codes)
+
+    def resolve_sales_iva_rate(
+        self,
+        cabys: str | None,
+        settings: CountrySettingsDTO,
+    ) -> Decimal:
+        """Use ``pac_cabys.tax_rate`` when assigned; otherwise the default.
+
+        Args:
+            cabys: Product CABYS or ``None``.
+            settings: Fallback ``default_iva_venta``.
+
+        Returns:
+            Decimal: Sales-VAT rate used by ``calculate()``.
+        """
+        default_rate = settings.decimal("default_iva_venta")
+        if not cabys:
+            return default_rate
+        rates = self._repository.get_cabys_tax_rates((cabys,))
+        if cabys in rates:
+            return rates[cabys]
+        return default_rate
+
     def load_category_tree_courier_map(
         self,
         product_ids: Sequence[int],

@@ -37,6 +37,7 @@ class ResultObjectDTO:
         courier: Resolved courier flag.
         restriction: Resolved import restriction.
         partida: Resolved tariff code, when available.
+        cabys: Resolved CABYS code, when available.
     """
 
     success: bool
@@ -57,6 +58,7 @@ class ResultObjectDTO:
     courier: bool | None = None
     restriction: int | None = None
     partida: str | None = None
+    cabys: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the product result using the public field names.
@@ -82,6 +84,7 @@ class ResultObjectDTO:
             "courier": self.courier,
             "restriction": self.restriction,
             "partida": self.partida,
+            "cabys": self.cabys,
             "success": self.success,
             "Message": self.message,
         }

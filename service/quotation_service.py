@@ -101,6 +101,7 @@ class QuotationService:
                 courier=policy.courier,
                 restriction=policy.restriction,
                 partida=policy.partida,
+                cabys=policy.cabys,
             )
 
         exchange_rate = strategy.resolve_exchange_rate(settings)

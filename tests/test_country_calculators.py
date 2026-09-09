@@ -139,6 +139,7 @@ class CountryCalculatorTests(unittest.TestCase):
             restriction=0,
             danger_good_active=False,
             partida=None,
+            sales_iva_rate=Decimal("0.12"),
         )
 
         result = GuatemalaQuotationService().calculate(
@@ -182,6 +183,7 @@ class CountryCalculatorTests(unittest.TestCase):
             restriction=0,
             danger_good_active=False,
             partida=None,
+            sales_iva_rate=Decimal("0.13"),
         )
 
         result = CostaRicaQuotationService().calculate(
@@ -196,6 +198,66 @@ class CountryCalculatorTests(unittest.TestCase):
         self.assertEqual(result.cost_usd, Decimal("123.77500"))
         self.assertEqual(result.price_usd, Decimal("153.852325"))
         self.assertEqual(result.price_local, Decimal("76930"))
+
+    def test_costa_rica_sales_iva_follows_cabys_rate(self) -> None:
+        """CR multiplies the post-margin price by the resolved CABYS rate."""
+        settings = CountrySettingsDTO(
+            {
+                "tax_usa": "0",
+                "tax_usa_rate": "0.07",
+                "poliza_seguro_aduanas": "0.005",
+                "poliza_flete_aduana_kg": "2",
+                "poliza_iva_aduanas": "0",
+                "poliza_flete_kg": "2",
+                "poliza_fee_combustible": "0",
+                "ley_6946": "0.01",
+                "poliza_desaduanaje": "10",
+                "poliza_seguro_flete": "0.005",
+                "courier_tramite_permisos": "14",
+                "default_iva_venta": "0.13",
+                "tipo_de_cambio": "500",
+                "price_rounding_step": "10",
+            }
+        )
+        base_policy = dict(
+            weight_kg=Decimal("1"),
+            arancel_percentage=Decimal("0.10"),
+            margin_percentage=Decimal("1.10"),
+            courier=False,
+            restriction=0,
+            danger_good_active=False,
+            partida=None,
+        )
+        exempt = CostaRicaQuotationService().calculate(
+            CalculationInputDTO(
+                amazon_price_usd=Decimal("100"),
+                policy=ResolvedPolicyDTO(
+                    **base_policy,
+                    sales_iva_rate=Decimal("0"),
+                    cabys="0000000000000",
+                ),
+                exchange_rate=Decimal("500"),
+                settings=settings,
+            )
+        )
+        reduced = CostaRicaQuotationService().calculate(
+            CalculationInputDTO(
+                amazon_price_usd=Decimal("100"),
+                policy=ResolvedPolicyDTO(
+                    **base_policy,
+                    sales_iva_rate=Decimal("0.01"),
+                    cabys="1111111111111",
+                ),
+                exchange_rate=Decimal("500"),
+                settings=settings,
+            )
+        )
+
+        self.assertEqual(exempt.cost_usd, Decimal("123.77500"))
+        self.assertEqual(exempt.price_usd, Decimal("136.152500"))
+        self.assertEqual(exempt.price_local, Decimal("68080"))
+        self.assertEqual(reduced.price_usd, Decimal("137.514025"))
+        self.assertEqual(reduced.price_local, Decimal("68760"))
 
     @staticmethod
     def _gt_promise_settings() -> CountrySettingsDTO:
