@@ -389,9 +389,13 @@ class QuotationOrchestrator:
         cost_dolar: Decimal,
         price_dolar: Decimal,
         price_local: Decimal,
+        price_without_tax_dolar: Decimal,
+        price_without_tax_local: Decimal,
         special_amazon_price: Decimal | None = None,
         special_price_dolar: Decimal | None = None,
         special_price_local: Decimal | None = None,
+        special_price_without_tax_dolar: Decimal | None = None,
+        special_price_without_tax_local: Decimal | None = None,
         offer_id: str = "",
         delivery_promise_amz: int | None = None,
     ) -> ResultObjectDTO:
@@ -406,9 +410,17 @@ class QuotationOrchestrator:
             cost_dolar: Landed cost in USD.
             price_dolar: Quoted sale price in USD from the calculator.
             price_local: Quoted sale price in local currency.
+            price_without_tax_dolar: Calculator sale price in USD before
+                sales VAT.
+            price_without_tax_local: Calculator sale price in local currency
+                before sales VAT.
             special_amazon_price: Special Amazon USD price, or ``None``.
             special_price_dolar: Quoted special sale price in USD, or ``None``.
             special_price_local: Quoted special local price, or ``None``.
+            special_price_without_tax_dolar: Special sale price in USD before
+                sales VAT, or ``None``.
+            special_price_without_tax_local: Special sale price in local
+                currency before sales VAT, or ``None``.
             offer_id: Selected Amazon offer identifier when applicable.
             delivery_promise_amz: Country promise tier when an offer exists.
 
@@ -424,8 +436,12 @@ class QuotationOrchestrator:
             special_amazon_price=special_amazon_price,
             price_dolar=price_dolar,
             price_local=price_local,
+            price_without_tax_dolar=price_without_tax_dolar,
+            price_without_tax_local=price_without_tax_local,
             special_price_dolar=special_price_dolar,
             special_price_local=special_price_local,
+            special_price_without_tax_dolar=special_price_without_tax_dolar,
+            special_price_without_tax_local=special_price_without_tax_local,
             cost_dolar=cost_dolar,
             cost_local=cost_dolar * exchange_rate,
             exchange_rate=exchange_rate,

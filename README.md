@@ -135,11 +135,15 @@ Reglas de forma:
       "offer_id": "offer-1",
       "amazon_price": 49.99,
       "price_dolar": 59.99,
+      "price_local": 529.0,
+      "price_without_tax_dolar": 53.56,
+      "price_without_tax_local": 473.0,
+      "special_price_dolar": 49.99,
+      "special_price_local": 449.0,
+      "special_price_without_tax_dolar": 44.63,
+      "special_price_without_tax_local": 401.0,
       "cost_dolar": 55.22,
       "cost_local": 427.96,
-      "special_price_dolar": 49.99,
-      "price_local": 529.0,
-      "special_price_local": 449.0,
       "exchange_rate": 7.75,
       "currency_code": "GTQ",
       "delivery_promise_amz": 1,
@@ -157,7 +161,11 @@ Reglas de forma:
 - `cost_dolar`: landed cost calculado en USD.
 - `cost_local`: landed cost convertido con `exchange_rate`.
 - `price_local`: precio público local (lista si hay special; si no, oferta).
-- `special_price_local`: precio local de la oferta si hay special; si no, `0`.
+- `price_without_tax_dolar`: precio de venta USD tomado de `calculate()` antes del IVA de venta.
+- `price_without_tax_local`: precio de venta local tomado de `calculate()` antes del IVA de venta.
+- `special_price_local`: precio local de la oferta si hay special; si no, `null`.
+- `special_price_without_tax_dolar`: special USD antes del IVA de venta; si no hay special, `null`.
+- `special_price_without_tax_local`: special local antes del IVA de venta; si no hay special, `null`.
 - `exchange_rate`: tasa USD → moneda local usada en el cálculo.
 - `currency_code`: código ISO de la moneda local (`GTQ` o `CRC`).
 - `success` global es `true` solamente si todos los resultados son exitosos.

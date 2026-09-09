@@ -84,4 +84,6 @@ class PriceQuotationService:
             calculation.cost_usd,
             calculation.price_usd,
             calculation.price_local,
+            calculation.price_without_tax_usd,
+            calculation.price_without_tax_local,
         )

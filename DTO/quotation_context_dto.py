@@ -195,9 +195,17 @@ class ResolvedPricesDTO:
         cost_usd: Landed cost in USD from the offer calculation.
         price_usd: Quoted public sale price in USD from the calculator.
         price_local: Quoted public sale price in local currency.
+        price_without_tax_usd: Sale price in USD taken from the calculator
+            before sales VAT is applied.
+        price_without_tax_local: Sale price in local currency taken from the
+            calculator before sales VAT is applied.
         special_price_usd: Quoted special sale price in USD, or ``None``.
         special_price_local: Quoted special sale price in local currency,
             or ``None``.
+        special_price_without_tax_usd: Special sale price in USD before
+            sales VAT, or ``None``.
+        special_price_without_tax_local: Special sale price in local currency
+            before sales VAT, or ``None``.
     """
 
     amazon_price: Decimal
@@ -205,8 +213,12 @@ class ResolvedPricesDTO:
     cost_usd: Decimal
     price_usd: Decimal
     price_local: Decimal
+    price_without_tax_usd: Decimal
+    price_without_tax_local: Decimal
     special_price_usd: Decimal | None
     special_price_local: Decimal | None
+    special_price_without_tax_usd: Decimal | None
+    special_price_without_tax_local: Decimal | None
 
 
 @dataclass(frozen=True)
@@ -216,6 +228,8 @@ class CalculationResultDTO:
     cost_usd: Decimal
     price_usd: Decimal
     price_local: Decimal
+    price_without_tax_usd: Decimal
+    price_without_tax_local: Decimal
 
 
 @dataclass(frozen=True)

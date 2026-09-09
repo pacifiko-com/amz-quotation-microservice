@@ -28,6 +28,8 @@ class _LinearCalculator:
             cost_usd=calculation.amazon_price_usd,
             price_usd=calculation.amazon_price_usd * Decimal("10"),
             price_local=calculation.amazon_price_usd * Decimal("10"),
+            price_without_tax_usd=calculation.amazon_price_usd * Decimal("9"),
+            price_without_tax_local=calculation.amazon_price_usd * Decimal("9"),
         )
 
 
@@ -70,8 +72,12 @@ class QuotationPriceTests(unittest.TestCase):
         self.assertEqual(quoted.cost_usd, Decimal("100"))
         self.assertEqual(quoted.price_usd, Decimal("1200"))
         self.assertEqual(quoted.price_local, Decimal("1200"))
+        self.assertEqual(quoted.price_without_tax_usd, Decimal("1080"))
+        self.assertEqual(quoted.price_without_tax_local, Decimal("1080"))
         self.assertEqual(quoted.special_price_usd, Decimal("1000"))
         self.assertEqual(quoted.special_price_local, Decimal("1000"))
+        self.assertEqual(quoted.special_price_without_tax_usd, Decimal("900"))
+        self.assertEqual(quoted.special_price_without_tax_local, Decimal("900"))
 
     def test_special_collapses_when_local_discount_is_below_threshold(self) -> None:
         """A local discount under the rounded percent threshold drops special."""
@@ -90,8 +96,12 @@ class QuotationPriceTests(unittest.TestCase):
         self.assertEqual(quoted.cost_usd, Decimal("100"))
         self.assertEqual(quoted.price_usd, Decimal("1000"))
         self.assertEqual(quoted.price_local, Decimal("1000"))
+        self.assertEqual(quoted.price_without_tax_usd, Decimal("900"))
+        self.assertEqual(quoted.price_without_tax_local, Decimal("900"))
         self.assertIsNone(quoted.special_price_usd)
         self.assertIsNone(quoted.special_price_local)
+        self.assertIsNone(quoted.special_price_without_tax_usd)
+        self.assertIsNone(quoted.special_price_without_tax_local)
 
     def test_contains_restricted_guidance_aborts_selected_offer(self) -> None:
         """The selected offer aborts the product; no replacement is searched."""
@@ -173,6 +183,8 @@ class QuotationPriceTests(unittest.TestCase):
             cost_usd=Decimal("80"),
             price_usd=Decimal("129.03"),
             price_local=Decimal("1000"),
+            price_without_tax_usd=Decimal("115.21"),
+            price_without_tax_local=Decimal("890"),
         )
 
         result = PriceQuotationService()._quote_product(
@@ -192,10 +204,14 @@ class QuotationPriceTests(unittest.TestCase):
         self.assertIsNone(result.special_amazon_price)
         self.assertEqual(result.price_dolar, Decimal("129.03"))
         self.assertEqual(result.price_local, Decimal("1000"))
+        self.assertEqual(result.price_without_tax_dolar, Decimal("115.21"))
+        self.assertEqual(result.price_without_tax_local, Decimal("890"))
         self.assertEqual(result.cost_dolar, Decimal("80"))
         self.assertEqual(result.cost_local, Decimal("620"))
         self.assertIsNone(result.special_price_dolar)
         self.assertIsNone(result.special_price_local)
+        self.assertIsNone(result.special_price_without_tax_dolar)
+        self.assertIsNone(result.special_price_without_tax_local)
         self.assertEqual(result.offer_id, "")
         self.assertIsNone(result.delivery_promise_amz)
         strategy.resolve_delivery_promise.assert_not_called()
@@ -212,8 +228,12 @@ class QuotationPriceTests(unittest.TestCase):
             special_amazon_price=Decimal("100"),
             price_dolar=Decimal("120"),
             price_local=Decimal("1200"),
+            price_without_tax_dolar=Decimal("107"),
+            price_without_tax_local=Decimal("1070"),
             special_price_dolar=Decimal("100"),
             special_price_local=Decimal("1000"),
+            special_price_without_tax_dolar=Decimal("89"),
+            special_price_without_tax_local=Decimal("890"),
             cost_dolar=Decimal("80"),
             cost_local=Decimal("620"),
             exchange_rate=Decimal("7.75"),
@@ -234,8 +254,12 @@ class QuotationPriceTests(unittest.TestCase):
                 "special_amazon_price",
                 "price_dolar",
                 "price_local",
+                "price_without_tax_dolar",
+                "price_without_tax_local",
                 "special_price_dolar",
                 "special_price_local",
+                "special_price_without_tax_dolar",
+                "special_price_without_tax_local",
                 "cost_dolar",
                 "cost_local",
                 "exchange_rate",

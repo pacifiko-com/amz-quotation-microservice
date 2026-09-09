@@ -126,9 +126,13 @@ class QuotationService:
             prices.cost_usd,
             prices.price_usd,
             prices.price_local,
+            prices.price_without_tax_usd,
+            prices.price_without_tax_local,
             special_amazon_price=prices.special_amazon_price,
             special_price_dolar=prices.special_price_usd,
             special_price_local=prices.special_price_local,
+            special_price_without_tax_dolar=prices.special_price_without_tax_usd,
+            special_price_without_tax_local=prices.special_price_without_tax_local,
             offer_id=offer.offer_id,
             delivery_promise_amz=promise,
         )
@@ -196,8 +200,12 @@ class QuotationService:
                 cost_usd=offer_calc.cost_usd,
                 price_usd=offer_calc.price_usd,
                 price_local=offer_calc.price_local,
+                price_without_tax_usd=offer_calc.price_without_tax_usd,
+                price_without_tax_local=offer_calc.price_without_tax_local,
                 special_price_usd=None,
                 special_price_local=None,
+                special_price_without_tax_usd=None,
+                special_price_without_tax_local=None,
             )
 
         # El umbral se compara sobre los precios locales ya calculados, no
@@ -216,8 +224,12 @@ class QuotationService:
                 cost_usd=offer_calc.cost_usd,
                 price_usd=offer_calc.price_usd,
                 price_local=offer_calc.price_local,
+                price_without_tax_usd=offer_calc.price_without_tax_usd,
+                price_without_tax_local=offer_calc.price_without_tax_local,
                 special_price_usd=None,
                 special_price_local=None,
+                special_price_without_tax_usd=None,
+                special_price_without_tax_local=None,
             )
 
         discount_pct = (
@@ -235,8 +247,12 @@ class QuotationService:
                 cost_usd=offer_calc.cost_usd,
                 price_usd=offer_calc.price_usd,
                 price_local=offer_calc.price_local,
+                price_without_tax_usd=offer_calc.price_without_tax_usd,
+                price_without_tax_local=offer_calc.price_without_tax_local,
                 special_price_usd=None,
                 special_price_local=None,
+                special_price_without_tax_usd=None,
+                special_price_without_tax_local=None,
             )
         return ResolvedPricesDTO(
             amazon_price=offer.list_price_usd,
@@ -244,6 +260,10 @@ class QuotationService:
             cost_usd=offer_calc.cost_usd,
             price_usd=list_calc.price_usd,
             price_local=list_calc.price_local,
+            price_without_tax_usd=list_calc.price_without_tax_usd,
+            price_without_tax_local=list_calc.price_without_tax_local,
             special_price_usd=offer_calc.price_usd,
             special_price_local=offer_calc.price_local,
+            special_price_without_tax_usd=offer_calc.price_without_tax_usd,
+            special_price_without_tax_local=offer_calc.price_without_tax_local,
         )

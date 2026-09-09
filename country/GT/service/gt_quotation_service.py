@@ -143,6 +143,8 @@ class GuatemalaQuotationService:
                 price_usd * calculation.exchange_rate,
                 settings,
             ),
+            price_without_tax_usd=price_without_iva_usd,
+            price_without_tax_local=price_without_iva_usd * calculation.exchange_rate
         )
 
     def resolve_delivery_promise(

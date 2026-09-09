@@ -25,10 +25,18 @@ class ResultObjectDTO:
         price_local: Quoted sale price in local currency. When a special
             qualifies this is the list calculation; otherwise the offer
             calculation.
+        price_without_tax_dolar: Sale price in USD taken from the calculator
+            before sales VAT.
+        price_without_tax_local: Sale price in local currency taken from the
+            calculator before sales VAT.
         special_price_dolar: Quoted special sale price in USD from the
             calculator, or ``None``.
         special_price_local: Quoted special sale price in local currency
             when a special qualifies; otherwise ``None``.
+        special_price_without_tax_dolar: Special sale price in USD before
+            sales VAT, or ``None``.
+        special_price_without_tax_local: Special sale price in local currency
+            before sales VAT, or ``None``.
         cost_dolar: Landed cost in USD.
         cost_local: Landed cost converted with the product exchange rate.
         exchange_rate: USD-to-local rate used for this product.
@@ -48,8 +56,12 @@ class ResultObjectDTO:
     special_amazon_price: Decimal | None = None
     price_dolar: Decimal | None = None
     price_local: Decimal | None = None
+    price_without_tax_dolar: Decimal | None = None
+    price_without_tax_local: Decimal | None = None
     special_price_dolar: Decimal | None = None
     special_price_local: Decimal | None = None
+    special_price_without_tax_dolar: Decimal | None = None
+    special_price_without_tax_local: Decimal | None = None
     cost_dolar: Decimal | None = None
     cost_local: Decimal | None = None
     exchange_rate: Decimal | None = None
@@ -74,8 +86,16 @@ class ResultObjectDTO:
             "special_amazon_price": _number(self.special_amazon_price),
             "price_dolar": _number(self.price_dolar),
             "price_local": _number(self.price_local),
+            "price_without_tax_dolar": _number(self.price_without_tax_dolar),
+            "price_without_tax_local": _number(self.price_without_tax_local),
             "special_price_dolar": _number(self.special_price_dolar),
             "special_price_local": _number(self.special_price_local),
+            "special_price_without_tax_dolar": _number(
+                self.special_price_without_tax_dolar
+            ),
+            "special_price_without_tax_local": _number(
+                self.special_price_without_tax_local
+            ),
             "cost_dolar": _number(self.cost_dolar),
             "cost_local": _number(self.cost_local),
             "exchange_rate": _number(self.exchange_rate),
