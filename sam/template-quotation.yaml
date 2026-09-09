@@ -129,16 +129,12 @@ Resources:
 
   UsagePlan:
     Type: AWS::ApiGateway::UsagePlan
+    DependsOn: QuotationApiStage
     Properties:
       UsagePlanName: !Sub "${ProjectName}-${Environment}-usage-plan"
       ApiStages:
         - ApiId: !Ref QuotationApi
-          Stage: !Ref Environment
-      Tags:
-        - Key: Project
-          Value: amz-quotation-microservice
-        - Key: DeploymentEnvironment
-          Value: !Ref Environment
+          Stage: !Ref QuotationApiStage
 
   ApiKey:
     Type: AWS::ApiGateway::ApiKey
