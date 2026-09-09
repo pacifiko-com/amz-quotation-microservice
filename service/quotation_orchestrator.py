@@ -99,8 +99,9 @@ class QuotationOrchestrator:
         products_map = strategy.load_products(
             tuple(item.product_id for item in products)
         )
+        # None unspsc requires using the default policy. Avoid saving it in unknown codes table.
         unspsc_map = strategy.load_unspsc_map(
-            tuple(item.unspsc for item in products),
+            tuple(item.unspsc for item in products if item.unspsc is not None),
             settings,
         )
         missing_codes = tuple(
@@ -120,8 +121,12 @@ class QuotationOrchestrator:
         need_category: list[int] = []
         for item in products:
             stored = products_map.get(item.product_id, EMPTY_PRODUCT_DATA)
-            unspsc_data = unspsc_map.get(item.unspsc) or strategy.get_default_unspsc(
-                settings
+            unspsc_data = (
+                strategy.get_default_unspsc(settings)
+                if item.unspsc is None
+                else unspsc_map.get(item.unspsc) or strategy.get_default_unspsc(
+                    settings
+                )
             )
             partida = item.pac_product_partida or stored.partida
             tariff = tariffs.get(partida) if partida else None
@@ -226,12 +231,14 @@ class QuotationOrchestrator:
         """
         # 1. Datos base: lo guardado en oc_product y la política del UNSPSC.
         product_data = strategy.get_product_data(product.product_id)
-        unspsc_data = strategy.get_unspsc_data(product.unspsc, settings)
-
-        # Si no se encuentra el UNSPSC, se guarda y se obtiene el default
-        if unspsc_data is None:
-            strategy.save_unknown_unspsc(product.unspsc)
+        if product.unspsc is None:
             unspsc_data = strategy.get_default_unspsc(settings)
+        else:
+            unspsc_data = strategy.get_unspsc_data(product.unspsc, settings)
+            # Si no se encuentra el UNSPSC, se guarda y se obtiene el default
+            if unspsc_data is None:
+                strategy.save_unknown_unspsc(product.unspsc)
+                unspsc_data = strategy.get_default_unspsc(settings)
 
         # 2. La partida del request manda sobre la almacenada en oc_product.
         partida = product.pac_product_partida or product_data.partida

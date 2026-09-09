@@ -118,7 +118,7 @@ Reglas de forma:
   peso Pacifiko, pero el peso final sigue siendo el mayor entre Amazon/Pacifiko.
 - `pac_product_courier`: boolean opcional; reemplaza `oc_product.courier`.
 - `pac_product_partida`: string opcional para conservar ceros iniciales.
-- `unspsc`: string requerido.
+- `unspsc`: string no vacío, o `null` para usar defaults de país sin registrar el código como desconocido. No se aceptan cadenas vacías ni solo espacios.
 - `amz_offers`: arreglo crudo `includedDataTypes.OFFERS`; su forma puede variar.
 
 ## Retorno

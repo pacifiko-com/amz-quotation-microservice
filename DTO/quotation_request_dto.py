@@ -19,7 +19,8 @@ class ProductFactsDTO:
     Attributes:
         product_id: Pacifiko product identifier.
         amz_weight_kg: Raw Amazon item weight in kilograms.
-        unspsc: UNSPSC code used to resolve import policy.
+        unspsc: UNSPSC code used to resolve import policy, or ``None``
+            to apply country defaults without recording an unknown code.
         pac_product_weight: Optional weight override in kilograms.
         pac_product_courier: Optional courier override.
         pac_product_partida: Optional tariff code override. It is a string
@@ -28,7 +29,7 @@ class ProductFactsDTO:
 
     product_id: int
     amz_weight_kg: Decimal
-    unspsc: str
+    unspsc: str | None
     pac_product_weight: Decimal | None = None
     pac_product_courier: bool | None = None
     pac_product_partida: str | None = None
@@ -220,9 +221,7 @@ def _product_facts_fields(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(product_id, int) or isinstance(product_id, bool):
         raise RequestValidationError("product_id must be an integer.")
 
-    unspsc = str(payload.get("unspsc") or "").strip()
-    if not unspsc:
-        raise RequestValidationError("unspsc is required.")
+    unspsc = _optional_unspsc(payload.get("unspsc"))
 
     courier = payload.get("pac_product_courier")
     if courier is not None and not isinstance(courier, bool):
@@ -268,6 +267,28 @@ def _extract_payload(event: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         raise RequestValidationError("body must contain a JSON object.")
     return parsed
+
+
+def _optional_unspsc(value: Any) -> str | None:
+    """Parse UNSPSC as a non-empty string or JSON null.
+
+    Args:
+        value: Raw JSON value.
+
+    Returns:
+        str | None: Trimmed code, or ``None`` when the caller omits policy.
+
+    Raises:
+        RequestValidationError: If the value is empty, blank or not a string.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise RequestValidationError("unspsc must be a string or null.")
+    unspsc = value.strip()
+    if not unspsc:
+        raise RequestValidationError("unspsc must not be empty.")
+    return unspsc
 
 
 def _required_decimal(value: Any, field_name: str) -> Decimal:

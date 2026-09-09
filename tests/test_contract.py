@@ -209,6 +209,45 @@ class ContractTests(unittest.TestCase):
 
         self.assertFalse(hasattr(request, "prefer_amazon_fulfillment"))
 
+    def test_request_accepts_null_unspsc(self) -> None:
+        """JSON null UNSPSC is stored as None so country defaults can apply."""
+        request = PriceQuotationRequestDTO.from_event(
+            {
+                "body": {
+                    "country": "GT",
+                    "products": [
+                        {
+                            "product_id": 1,
+                            "amz_weight_kg": 1,
+                            "unspsc": None,
+                            "amazon_price_usd": 10,
+                        }
+                    ],
+                }
+            }
+        )
+
+        self.assertIsNone(request.products[0].unspsc)
+
+    def test_request_rejects_empty_unspsc(self) -> None:
+        """Blank UNSPSC values are invalid even when null is allowed."""
+        with self.assertRaisesRegex(RequestValidationError, "unspsc must not be empty"):
+            PriceQuotationRequestDTO.from_event(
+                {
+                    "body": {
+                        "country": "GT",
+                        "products": [
+                            {
+                                "product_id": 1,
+                                "amz_weight_kg": 1,
+                                "unspsc": "   ",
+                                "amazon_price_usd": 10,
+                            }
+                        ],
+                    }
+                }
+            )
+
     @patch("service.quotation_orchestrator.CountryStrategyFactory.create")
     def test_partial_results_keep_input_order(self, create) -> None:
         """A failed product does not stop later products."""

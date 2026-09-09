@@ -14,6 +14,7 @@ from DTO.quotation_context_dto import (
 )
 from DTO.quotation_request_dto import ProductQuotationDTO
 from repository.base_quotation_repository import BaseQuotationRepository
+from service.quotation_orchestrator import QuotationOrchestrator
 from service.quotation_service import QuotationService
 
 
@@ -115,6 +116,43 @@ class CountryPolicyTests(unittest.TestCase):
         self.assertTrue(default.courier)
         self.assertEqual(cursor.execute.call_count, 1)
         cursor.executemany.assert_called_once()
+
+    def test_null_unspsc_uses_defaults_without_recording_unknown(self) -> None:
+        """A null UNSPSC applies country defaults and skips unknown inserts."""
+        default = UnspscDataDTO(
+            arancel_percentage=Decimal("0.25"),
+            restriction=0,
+            category_code=0,
+            margin_percentage=Decimal("1.2"),
+            danger_good_active=False,
+            courier=False,
+        )
+        strategy = MagicMock()
+        strategy.get_product_data.return_value = ProductDataDTO(
+            weight_kg=Decimal("1"),
+            courier=False,
+            partida=None,
+        )
+        strategy.get_default_unspsc.return_value = default
+        strategy.resolve_tariff_data.return_value = None
+        strategy.get_category_tree_courier.return_value = False
+        product = ProductQuotationDTO(
+            product_id=10,
+            amz_weight_kg=Decimal("1"),
+            unspsc=None,
+            amz_offers=(),
+        )
+
+        policy = QuotationOrchestrator().resolve_policy(
+            strategy,
+            product,
+            CountrySettingsDTO({"margen": "1.2"}),
+        )
+
+        self.assertEqual(policy.arancel_percentage, Decimal("0.25"))
+        strategy.get_unspsc_data.assert_not_called()
+        strategy.save_unknown_unspsc.assert_not_called()
+        strategy.get_default_unspsc.assert_called_once()
 
 
 if __name__ == "__main__":
