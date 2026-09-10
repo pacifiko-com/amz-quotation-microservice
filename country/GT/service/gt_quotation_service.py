@@ -17,6 +17,11 @@ from DTO.quotation_context_dto import (
 from Utils.exceptions import ProductQuotationError
 from Utils.price_rounding import round_price
 
+
+def _operation_notes(name: str, formula: str, values: str) -> tuple[str, str]:
+    """Describe one operation as a variable formula, then with numbers."""
+    return (f"{name} = {formula}", f"{name} = {values}")
+
 GT_SETTING_KEYS = (
     "tipo_de_cambio",
     "currency_code",
@@ -76,8 +81,23 @@ class GuatemalaQuotationService:
         policy = calculation.policy
         settings = calculation.settings
         amazon_price_usd = calculation.amazon_price_usd
+        exchange_rate = calculation.exchange_rate
         notes: list[str] = []
         weight_lb = policy.weight_lb
+        notes.extend(
+            _operation_notes(
+                "weight_lb",
+                "policy.weight_lb",
+                f"{weight_lb}",
+            )
+        )
+        notes.extend(
+            _operation_notes(
+                "amazon_price_usd",
+                "calculation.amazon_price_usd",
+                f"{amazon_price_usd}",
+            )
+        )
 
         # El modo de importación solo cambia qué key se lee; el resto del
         # cálculo es idéntico para courier y no courier.
@@ -91,42 +111,94 @@ class GuatemalaQuotationService:
             notes.append("Calculadora GT en modo no courier.")
         freight_rate = settings.decimal(freight_key)
         customs_clearance = settings.decimal(clearance_key)
-        notes.append(
-            f"Flete desde oc_setting {freight_key}={freight_rate}; "
-            f"desaduanaje desde {clearance_key}={customs_clearance}."
+        notes.extend(
+            _operation_notes(
+                "freight_rate",
+                f"settings.{freight_key}",
+                f"{freight_rate}",
+            )
+        )
+        notes.extend(
+            _operation_notes(
+                "customs_clearance",
+                f"settings.{clearance_key}",
+                f"{customs_clearance}",
+            )
         )
         freight_usd = weight_lb * freight_rate
+        notes.extend(
+            _operation_notes(
+                "freight_usd",
+                "weight_lb * freight_rate",
+                f"{weight_lb} * {freight_rate} = {freight_usd}",
+            )
+        )
         insurance_rate = settings.decimal("seguro_valor_producto")
         insurance_usd = amazon_price_usd * insurance_rate
-        notes.append(
-            f"Seguro = Amazon * oc_setting seguro_valor_producto ({insurance_rate})."
+        notes.extend(
+            _operation_notes(
+                "insurance_usd",
+                "amazon_price_usd * insurance_rate",
+                f"{amazon_price_usd} * {insurance_rate} = {insurance_usd}",
+            )
         )
 
         # Esta suma se guarda porque los dos pasos siguientes la reutilizan.
         tariff_base = amazon_price_usd + freight_usd + insurance_usd
+        notes.extend(
+            _operation_notes(
+                "tariff_base",
+                "amazon_price_usd + freight_usd + insurance_usd",
+                f"{amazon_price_usd} + {freight_usd} + {insurance_usd} = {tariff_base}",
+            )
+        )
         tariff_usd = tariff_base * policy.arancel_percentage
-        notes.append(
-            f"Arancel {policy.arancel_percentage} sobre (Amazon + flete + seguro)."
+        notes.extend(
+            _operation_notes(
+                "tariff_usd",
+                "tariff_base * arancel_percentage",
+                f"{tariff_base} * {policy.arancel_percentage} = {tariff_usd}",
+            )
         )
 
         # Este componente solo entra cuando courier es true; si no, queda en 0.
         if policy.courier:
-            import_iva = (tariff_base + tariff_usd) * settings.decimal(
-                "iva_importacion"
-            )
-            notes.append(
-                "IVA de importación courier aplicado (oc_setting iva_importacion)."
+            import_iva_rate = settings.decimal("iva_importacion")
+            import_iva = (tariff_base + tariff_usd) * import_iva_rate
+            notes.extend(
+                _operation_notes(
+                    "import_iva",
+                    "(tariff_base + tariff_usd) * import_iva_rate",
+                    f"({tariff_base} + {tariff_usd}) * {import_iva_rate} = {import_iva}",
+                )
             )
         else:
             import_iva = Decimal("0")
-            notes.append("IVA de importación no aplica (solo courier).")
+            notes.extend(
+                _operation_notes(
+                    "import_iva",
+                    "0 (non-courier)",
+                    f"{import_iva}",
+                )
+            )
         if policy.danger_good_active:
             danger_usd = settings.decimal("danger_dolar")
-            notes.append(
-                f"Cargo danger_dolar de oc_setting incluido: {danger_usd}."
+            notes.extend(
+                _operation_notes(
+                    "danger_usd",
+                    "settings.danger_dolar",
+                    f"{danger_usd}",
+                )
             )
         else:
             danger_usd = Decimal("0")
+            notes.extend(
+                _operation_notes(
+                    "danger_usd",
+                    "0 (danger_good_active is false)",
+                    f"{danger_usd}",
+                )
+            )
         cost_usd = (
             amazon_price_usd
             + customs_clearance
@@ -135,41 +207,102 @@ class GuatemalaQuotationService:
             + freight_usd
             + danger_usd
         )
+        notes.extend(
+            _operation_notes(
+                "cost_usd",
+                "amazon_price_usd + customs_clearance + tariff_usd + import_iva + freight_usd + danger_usd",
+                f"{amazon_price_usd} + {customs_clearance} + {tariff_usd} + {import_iva} + {freight_usd} + {danger_usd} = {cost_usd}",
+            )
+        )
 
         price_without_iva_usd = cost_usd * policy.margin_percentage
-        notes.append(f"Margen aplicado: {policy.margin_percentage}.")
+        notes.extend(
+            _operation_notes(
+                "price_without_iva_usd",
+                "cost_usd * margin_percentage",
+                f"{cost_usd} * {policy.margin_percentage} = {price_without_iva_usd}",
+            )
+        )
         # Courier arma esta base sumando componentes; no courier reutiliza
         # el precio con margen que ya se calculó arriba.
         if policy.courier:
             margin_markup = max(policy.margin_percentage - Decimal("1"), Decimal("0"))
+            notes.extend(
+                _operation_notes(
+                    "margin_markup",
+                    "max(margin_percentage - 1, 0)",
+                    f"max({policy.margin_percentage} - 1, 0) = {margin_markup}",
+                )
+            )
             iva_base_usd = (
                 freight_usd
                 + cost_usd * margin_markup
                 + customs_clearance
                 + danger_usd
             )
-            notes.append("Base de IVA de venta courier armada por componentes.")
+            notes.extend(
+                _operation_notes(
+                    "iva_base_usd",
+                    "freight_usd + cost_usd * margin_markup + customs_clearance + danger_usd",
+                    f"{freight_usd} + {cost_usd} * {margin_markup} + {customs_clearance} + {danger_usd} = {iva_base_usd}",
+                )
+            )
         else:
             iva_base_usd = price_without_iva_usd
-            notes.append("Base de IVA de venta = precio con margen.")
-        sales_iva = settings.decimal("default_iva_venta")
-        notes.append(
-            f"IVA de venta GT desde oc_setting default_iva_venta ({sales_iva})."
+            notes.extend(
+                _operation_notes(
+                    "iva_base_usd",
+                    "price_without_iva_usd",
+                    f"{iva_base_usd}",
+                )
+            )
+        sales_iva_rate = settings.decimal("default_iva_venta")
+        sales_iva_usd = iva_base_usd * sales_iva_rate
+        notes.extend(
+            _operation_notes(
+                "sales_iva_usd",
+                "iva_base_usd * sales_iva_rate",
+                f"{iva_base_usd} * {sales_iva_rate} = {sales_iva_usd}",
+            )
         )
-        price_usd = price_without_iva_usd + (iva_base_usd * sales_iva)
-        notes.append(
-            f"Tasa de cambio {calculation.exchange_rate}; "
-            "precio local redondeado con price_rounding_step."
+        price_usd = price_without_iva_usd + sales_iva_usd
+        notes.extend(
+            _operation_notes(
+                "price_usd",
+                "price_without_iva_usd + sales_iva_usd",
+                f"{price_without_iva_usd} + {sales_iva_usd} = {price_usd}",
+            )
+        )
+        price_local_raw = price_usd * exchange_rate
+        notes.extend(
+            _operation_notes(
+                "price_local_raw",
+                "price_usd * exchange_rate",
+                f"{price_usd} * {exchange_rate} = {price_local_raw}",
+            )
+        )
+        price_local = round_price(price_local_raw, settings)
+        notes.extend(
+            _operation_notes(
+                "price_local",
+                "round_price(price_local_raw)",
+                f"round_price({price_local_raw}) = {price_local}",
+            )
+        )
+        price_without_tax_local = price_without_iva_usd * exchange_rate
+        notes.extend(
+            _operation_notes(
+                "price_without_tax_local",
+                "price_without_iva_usd * exchange_rate",
+                f"{price_without_iva_usd} * {exchange_rate} = {price_without_tax_local}",
+            )
         )
         return CalculationResultDTO(
             cost_usd=cost_usd,
             price_usd=price_usd,
-            price_local=round_price(
-                price_usd * calculation.exchange_rate,
-                settings,
-            ),
+            price_local=price_local,
             price_without_tax_usd=price_without_iva_usd,
-            price_without_tax_local=price_without_iva_usd * calculation.exchange_rate,
+            price_without_tax_local=price_without_tax_local,
             quotation_notes=tuple(notes),
         )
 

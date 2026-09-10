@@ -14,6 +14,11 @@ from DTO.quotation_context_dto import (
 )
 from Utils.price_rounding import round_price
 
+
+def _operation_notes(name: str, formula: str, values: str) -> tuple[str, str]:
+    """Describe one operation as a variable formula, then with numbers."""
+    return (f"{name} = {formula}", f"{name} = {values}")
+
 CR_SETTING_KEYS = (
     "tipo_de_cambio",
     "currency_code",
@@ -89,6 +94,7 @@ class CostaRicaQuotationService:
         policy = calculation.policy
         settings = calculation.settings
         amazon_price_usd = calculation.amazon_price_usd
+        exchange_rate = calculation.exchange_rate
         notes: list[str] = []
         # El modo solo elige el prefijo de las keys; el resto del cálculo
         # sigue el mismo orden.
@@ -100,47 +106,135 @@ class CostaRicaQuotationService:
             notes.append("Calculadora CR en modo póliza (keys poliza_*).")
 
         weight_lb = policy.weight_lb
+        notes.extend(
+            _operation_notes(
+                "weight_lb",
+                "policy.weight_lb",
+                f"{weight_lb}",
+            )
+        )
+        notes.extend(
+            _operation_notes(
+                "amazon_price_usd",
+                "calculation.amazon_price_usd",
+                f"{amazon_price_usd}",
+            )
+        )
 
         # Este componente es opcional y se apaga con un flag de configuración.
+        tax_usa_rate = settings.decimal("tax_usa_rate")
         if settings.boolean("tax_usa"):
-            usa_tax = amazon_price_usd * settings.decimal("tax_usa_rate")
-            notes.append(
-                "Impuesto USA activo (tax_usa_rate sobre precio Amazon)."
+            usa_tax = amazon_price_usd * tax_usa_rate
+            notes.extend(
+                _operation_notes(
+                    "usa_tax",
+                    "amazon_price_usd * tax_usa_rate",
+                    f"{amazon_price_usd} * {tax_usa_rate} = {usa_tax}",
+                )
             )
         else:
             usa_tax = Decimal("0")
-            notes.append("Impuesto USA apagado (tax_usa=0).")
+            notes.extend(
+                _operation_notes(
+                    "usa_tax",
+                    "0 (tax_usa is false)",
+                    f"{usa_tax}",
+                )
+            )
 
         # Este subtotal se calcula primero porque los tres pasos siguientes
         # lo reutilizan. Usa keys distintas a las del flete que va más abajo.
-        customs_insurance = amazon_price_usd * settings.decimal(
-            f"{mode}_seguro_aduanas"
+        customs_insurance_rate = settings.decimal(f"{mode}_seguro_aduanas")
+        customs_insurance = amazon_price_usd * customs_insurance_rate
+        notes.extend(
+            _operation_notes(
+                "customs_insurance",
+                f"amazon_price_usd * {mode}_seguro_aduanas",
+                f"{amazon_price_usd} * {customs_insurance_rate} = {customs_insurance}",
+            )
         )
-        customs_freight = weight_lb * settings.decimal(f"{mode}_flete_aduana_kg")
+        customs_freight_rate = settings.decimal(f"{mode}_flete_aduana_kg")
+        customs_freight = weight_lb * customs_freight_rate
+        notes.extend(
+            _operation_notes(
+                "customs_freight",
+                f"weight_lb * {mode}_flete_aduana_kg",
+                f"{weight_lb} * {customs_freight_rate} = {customs_freight}",
+            )
+        )
         cif = amazon_price_usd + customs_insurance + customs_freight
-        notes.append(
-            f"CIF = Amazon + {mode}_seguro_aduanas + {mode}_flete_aduana_kg."
+        notes.extend(
+            _operation_notes(
+                "cif",
+                "amazon_price_usd + customs_insurance + customs_freight",
+                f"{amazon_price_usd} + {customs_insurance} + {customs_freight} = {cif}",
+            )
         )
 
         # El orden importa: el segundo componente recibe el subtotal ya
         # incrementado por el primero.
         tariff = cif * policy.arancel_percentage
-        notes.append(f"Arancel {policy.arancel_percentage} sobre CIF.")
-        customs_vat = (cif + tariff) * settings.decimal(f"{mode}_iva_aduanas")
-        notes.append(f"IVA aduanas desde {mode}_iva_aduanas.")
-        law_6946 = cif * settings.decimal("ley_6946")
-        notes.append("Ley 6946 desde oc_setting ley_6946 sobre CIF.")
+        notes.extend(
+            _operation_notes(
+                "tariff",
+                "cif * arancel_percentage",
+                f"{cif} * {policy.arancel_percentage} = {tariff}",
+            )
+        )
+        customs_vat_rate = settings.decimal(f"{mode}_iva_aduanas")
+        customs_vat = (cif + tariff) * customs_vat_rate
+        notes.extend(
+            _operation_notes(
+                "customs_vat",
+                f"(cif + tariff) * {mode}_iva_aduanas",
+                f"({cif} + {tariff}) * {customs_vat_rate} = {customs_vat}",
+            )
+        )
+        law_6946_rate = settings.decimal("ley_6946")
+        law_6946 = cif * law_6946_rate
+        notes.extend(
+            _operation_notes(
+                "law_6946",
+                "cif * ley_6946",
+                f"{cif} * {law_6946_rate} = {law_6946}",
+            )
+        )
 
         # Estos componentes no reutilizan el subtotal anterior.
-        real_freight = weight_lb * settings.decimal(f"{mode}_flete_kg")
-        fuel_fee = real_freight * settings.decimal(f"{mode}_fee_combustible")
-        clearance = settings.decimal(f"{mode}_desaduanaje")
-        freight_insurance = amazon_price_usd * settings.decimal(
-            f"{mode}_seguro_flete"
+        real_freight_rate = settings.decimal(f"{mode}_flete_kg")
+        real_freight = weight_lb * real_freight_rate
+        notes.extend(
+            _operation_notes(
+                "real_freight",
+                f"weight_lb * {mode}_flete_kg",
+                f"{weight_lb} * {real_freight_rate} = {real_freight}",
+            )
         )
-        notes.append(
-            f"Flete real {mode}_flete_kg, combustible {mode}_fee_combustible, "
-            f"desaduanaje {mode}_desaduanaje, seguro {mode}_seguro_flete."
+        fuel_rate = settings.decimal(f"{mode}_fee_combustible")
+        fuel_fee = real_freight * fuel_rate
+        notes.extend(
+            _operation_notes(
+                "fuel_fee",
+                f"real_freight * {mode}_fee_combustible",
+                f"{real_freight} * {fuel_rate} = {fuel_fee}",
+            )
+        )
+        clearance = settings.decimal(f"{mode}_desaduanaje")
+        notes.extend(
+            _operation_notes(
+                "clearance",
+                f"settings.{mode}_desaduanaje",
+                f"{clearance}",
+            )
+        )
+        freight_insurance_rate = settings.decimal(f"{mode}_seguro_flete")
+        freight_insurance = amazon_price_usd * freight_insurance_rate
+        notes.extend(
+            _operation_notes(
+                "freight_insurance",
+                f"amazon_price_usd * {mode}_seguro_flete",
+                f"{amazon_price_usd} * {freight_insurance_rate} = {freight_insurance}",
+            )
         )
         base_cost = (
             amazon_price_usd
@@ -153,25 +247,80 @@ class CostaRicaQuotationService:
             + clearance
             + freight_insurance
         )
+        notes.extend(
+            _operation_notes(
+                "base_cost",
+                "amazon_price_usd + usa_tax + tariff + customs_vat + real_freight + fuel_fee + law_6946 + clearance + freight_insurance",
+                f"{amazon_price_usd} + {usa_tax} + {tariff} + {customs_vat} + {real_freight} + {fuel_fee} + {law_6946} + {clearance} + {freight_insurance} = {base_cost}",
+            )
+        )
         # Este cargo se suma después del margen, no antes: entra al costo y al
         # precio como monto fijo, pero no forma parte de la base multiplicada.
         if policy.courier:
             permit_fee = settings.decimal("courier_tramite_permisos")
-            notes.append(
-                "Trámite courier_tramite_permisos sumado después del margen."
+            notes.extend(
+                _operation_notes(
+                    "permit_fee",
+                    "settings.courier_tramite_permisos",
+                    f"{permit_fee}",
+                )
             )
         else:
             permit_fee = Decimal("0")
+            notes.extend(
+                _operation_notes(
+                    "permit_fee",
+                    "0 (non-courier)",
+                    f"{permit_fee}",
+                )
+            )
         cost_usd = base_cost + permit_fee
-        notes.append(f"Margen aplicado: {policy.margin_percentage}.")
+        notes.extend(
+            _operation_notes(
+                "cost_usd",
+                "base_cost + permit_fee",
+                f"{base_cost} + {permit_fee} = {cost_usd}",
+            )
+        )
         price_without_iva_usd = base_cost * policy.margin_percentage + permit_fee
-        notes.append(
-            f"IVA de venta {policy.sales_iva_rate} (CABYS o default_iva_venta)."
+        notes.extend(
+            _operation_notes(
+                "price_without_iva_usd",
+                "base_cost * margin_percentage + permit_fee",
+                f"{base_cost} * {policy.margin_percentage} + {permit_fee} = {price_without_iva_usd}",
+            )
         )
         price_usd = price_without_iva_usd * (Decimal("1") + policy.sales_iva_rate)
-        notes.append(
-            f"Tasa de cambio {calculation.exchange_rate}; "
-            "precio local redondeado con price_rounding_step."
+        notes.extend(
+            _operation_notes(
+                "price_usd",
+                "price_without_iva_usd * (1 + sales_iva_rate)",
+                f"{price_without_iva_usd} * (1 + {policy.sales_iva_rate}) = {price_usd}",
+            )
+        )
+        price_local_raw = price_usd * exchange_rate
+        notes.extend(
+            _operation_notes(
+                "price_local_raw",
+                "price_usd * exchange_rate",
+                f"{price_usd} * {exchange_rate} = {price_local_raw}",
+            )
+        )
+        price_local = round_price(price_local_raw, settings)
+        notes.extend(
+            _operation_notes(
+                "price_local",
+                "round_price(price_local_raw)",
+                f"round_price({price_local_raw}) = {price_local}",
+            )
+        )
+        price_without_tax_local = price_without_iva_usd * exchange_rate
+        notes.extend(
+            _operation_notes(
+                "price_without_tax_local",
+                "price_without_iva_usd * exchange_rate",
+                f"{price_without_iva_usd} * {exchange_rate} = {price_without_tax_local}",
+            )
         )
 
         # CR aplica el recargo sobre el total y convierte al final; GT
@@ -179,12 +328,9 @@ class CostaRicaQuotationService:
         return CalculationResultDTO(
             cost_usd=cost_usd,
             price_usd=price_usd,
-            price_local=round_price(
-                price_usd * calculation.exchange_rate,
-                settings,
-            ),
+            price_local=price_local,
             price_without_tax_usd=price_without_iva_usd,
-            price_without_tax_local=price_without_iva_usd * calculation.exchange_rate,
+            price_without_tax_local=price_without_tax_local,
             quotation_notes=tuple(notes),
         )
 
