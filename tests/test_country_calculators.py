@@ -132,7 +132,7 @@ class CountryCalculatorTests(unittest.TestCase):
             }
         )
         policy = ResolvedPolicyDTO(
-            weight_kg=Decimal("0.453592"),
+            weight_lb=Decimal("1"),
             arancel_percentage=Decimal("0.10"),
             margin_percentage=Decimal("1.20"),
             courier=False,
@@ -178,7 +178,7 @@ class CountryCalculatorTests(unittest.TestCase):
             }
         )
         policy = ResolvedPolicyDTO(
-            weight_kg=Decimal("1"),
+            weight_lb=Decimal("1"),
             arancel_percentage=Decimal("0.10"),
             margin_percentage=Decimal("1.10"),
             courier=False,
@@ -224,7 +224,7 @@ class CountryCalculatorTests(unittest.TestCase):
             }
         )
         base_policy = dict(
-            weight_kg=Decimal("1"),
+            weight_lb=Decimal("1"),
             arancel_percentage=Decimal("0.10"),
             margin_percentage=Decimal("1.10"),
             courier=False,

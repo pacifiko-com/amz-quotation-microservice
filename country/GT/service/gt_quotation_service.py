@@ -77,19 +77,7 @@ class GuatemalaQuotationService:
         settings = calculation.settings
         amazon_price_usd = calculation.amazon_price_usd
         notes: list[str] = []
-        kilos_per_pound = settings.decimal("kilos_por_libra")
-        if kilos_per_pound <= 0:
-            raise ProductQuotationError("kilos_por_libra must be greater than zero.")
-
-        # La tarifa está expresada por libra, así que el peso se convierte y se
-        # redondea hacia arriba antes de multiplicar.
-        weight_lb = (policy.weight_kg / kilos_per_pound).to_integral_value(
-            rounding=ROUND_CEILING
-        )
-        notes.append(
-            f"Peso {policy.weight_kg} kg convertido a {weight_lb} lb "
-            "(kilos_por_libra, redondeo hacia arriba)."
-        )
+        weight_lb = policy.weight_lb
 
         # El modo de importación solo cambia qué key se lee; el resto del
         # cálculo es idéntico para courier y no courier.

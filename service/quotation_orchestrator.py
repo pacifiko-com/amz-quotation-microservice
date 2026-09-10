@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from decimal import Decimal
+from decimal import Decimal, ROUND_CEILING
 
 from country.country_strategy_abstract import CountryQuotationStrategy
 from country.country_strategy_factory import CountryStrategyFactory
@@ -285,21 +285,26 @@ class QuotationOrchestrator:
             notes.append(
                 f"Peso Pacifiko tomado del override del request: {stored_weight}."
             )
-        elif product_data.weight_kg is not None:
-            stored_weight = product_data.weight_kg
-            notes.append(f"Peso Pacifiko tomado de oc_product: {stored_weight}.")
+        elif product_data.weight_lb is not None:
+            stored_weight = product_data.weight_lb
+            notes.append(f"Peso Pacifiko tomado de oc_product: {stored_weight} lb.")
         else:
             stored_weight = None
             notes.append("No hay peso Pacifiko; se usa solo el peso Amazon.")
-        notes.append(f"Peso Amazon del request: {product.amz_weight_kg} kg.")
-        weight = max(
-            product.amz_weight_kg,
-            stored_weight / _KG_TO_LB
-            if stored_weight is not None
-            else product.amz_weight_kg,
+        
+        amz_weight_lb = (product.amz_weight_kg * _KG_TO_LB).to_integral_value(
+            rounding=ROUND_CEILING
         )
+        weight_lb = max(
+            amz_weight_lb,
+            stored_weight
+            if stored_weight is not None
+            else amz_weight_lb,
+        )
+        notes.append(f"Peso Amazon del request: {product.amz_weight_kg} kg convertido a {amz_weight_lb} lb.")
+        
         notes.append(
-            f"Peso usado: {weight} kg (máximo entre Amazon y Pacifiko convertido)."
+            f"Peso usado: {weight_lb} lb (máximo entre Amazon (convertido a lb y redondeado hacia arriba) y Pacifiko (valor de oc_setting almacenado en lb))."
         )
 
         # 4. Courier: se evalúa en cascada y una vez encendido ya no se apaga,
@@ -404,7 +409,7 @@ class QuotationOrchestrator:
         )
         notes.extend(iva_notes)
         return ResolvedPolicyDTO(
-            weight_kg=weight,
+            weight_lb=weight_lb,
             arancel_percentage=arancel,
             margin_percentage=margin,
             courier=bool(courier),
@@ -438,9 +443,9 @@ class QuotationOrchestrator:
         # caller vea con qué datos se tomó la decisión.
         if policy.restriction:
             message = "Product is restricted."
-        elif policy.weight_kg <= 0:
+        elif policy.weight_lb <= 0:
             message = "Product weight is required."
-        elif policy.weight_kg >= settings.decimal("max_product_weight_kg"):
+        elif policy.weight_lb >= settings.decimal("max_product_weight_kg"):
             message = "Product exceeds the configured weight limit."
         else:
             return None

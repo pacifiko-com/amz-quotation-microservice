@@ -21,7 +21,7 @@ class ProductFactsDTO:
         amz_weight_kg: Raw Amazon item weight in kilograms.
         unspsc: UNSPSC code used to resolve import policy, or ``None``
             to apply country defaults without recording an unknown code.
-        pac_product_weight: Optional weight override in kilograms.
+        pac_product_weight: Optional Pacifiko weight override in pounds.
         pac_product_courier: Optional courier override.
         pac_product_partida: Optional tariff code override. It is a string
             so leading zeros are preserved.

@@ -30,7 +30,7 @@ class _RestrictedStrategy:
     def get_product_data(self, product_id):
         """Return a stored tariff code."""
         return ProductDataDTO(
-            weight_kg=Decimal("1"),
+            weight_lb=Decimal("1"),
             courier=False,
             partida="001",
         )
@@ -133,7 +133,7 @@ class CountryPolicyTests(unittest.TestCase):
         )
         strategy = MagicMock()
         strategy.get_product_data.return_value = ProductDataDTO(
-            weight_kg=Decimal("1"),
+            weight_lb=Decimal("1"),
             courier=False,
             partida=None,
         )

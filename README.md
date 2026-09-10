@@ -183,7 +183,8 @@ Reglas de forma:
 
 ### Guatemala
 
-- Peso: `max(amz_weight_kg, override de peso o peso BD)`.
+- Peso: `amz_weight_kg` se convierte a lb, se compara con Pacifiko (ya en lb)
+  y se propaga `weight_lb`. La calculadora no vuelve a convertir.
 - Courier base: override/producto no cero; en otro caso UNSPSC.
 - Con partida: courier de partida. Si es courier, arancel/restricción permanecen
   desde UNSPSC; si no es courier, la partida puede reemplazarlos.
@@ -195,7 +196,8 @@ Reglas de forma:
 
 ### Costa Rica
 
-- Peso: `max(amz_weight_kg, override de peso o peso BD)`.
+- Peso: igual que GT; la política expone `weight_lb` y la calculadora lo usa
+  sin reconvertir a kg.
 - Courier: override/producto, UNSPSC y árbol de categorías.
 - Partida: reemplaza porcentaje por `dai + isc`; no reemplaza courier ni
   restricción.
@@ -221,7 +223,7 @@ por la implementación; no incluye credenciales ni tokens.
 | `danger_dolar` | GT | Cargo mercancía peligrosa | Existente |
 | `dias_importacion_amz` | GT | Buffer de promesa | Existente |
 | `global_store_promises` | GT | Rangos/textos de promesa | Existente |
-| `kilos_por_libra` | GT | Conversión kg → lb | Nueva |
+| `kilos_por_libra` | GT | Reservada (el peso ya llega en `weight_lb`) | Existente |
 | `default_arancel` | GT | Arancel para UNSPSC desconocido | Nueva |
 | `default_restriction` | GT | Restricción default UNSPSC | Nueva |
 | `default_arancel_category_cod` | GT | Categoría default UNSPSC | Nueva |

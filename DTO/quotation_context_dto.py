@@ -11,7 +11,7 @@ from typing import Any
 class ProductDataDTO:
     """Pacifiko product data used as fallback when overrides are absent."""
 
-    weight_kg: Decimal | None
+    weight_lb: Decimal | None
     courier: bool | None
     partida: str | None
     cabys: str | None = None
@@ -149,7 +149,7 @@ class QuotationLookupDTO:
     sales_iva: dict[str, Decimal]
 
 
-EMPTY_PRODUCT_DATA = ProductDataDTO(weight_kg=None, courier=None, partida=None)
+EMPTY_PRODUCT_DATA = ProductDataDTO(weight_lb=None, courier=None, partida=None)
 
 
 @dataclass(frozen=True)
@@ -175,7 +175,7 @@ class SelectedOfferDTO:
 class ResolvedPolicyDTO:
     """Country policy selected from product, UNSPSC and tariff sources."""
 
-    weight_kg: Decimal
+    weight_lb: Decimal
     arancel_percentage: Decimal
     margin_percentage: Decimal
     courier: bool

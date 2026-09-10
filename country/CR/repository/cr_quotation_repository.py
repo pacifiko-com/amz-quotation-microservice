@@ -134,7 +134,7 @@ class CostaRicaQuotationRepository(BaseQuotationRepository):
             ProductDataDTO: Product projection used by the common flow.
         """
         return ProductDataDTO(
-            weight_kg=(
+            weight_lb=(
                 decimal_from_row(row["weight"], "weight")
                 if row["weight"] is not None
                 else None

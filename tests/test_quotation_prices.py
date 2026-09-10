@@ -45,7 +45,7 @@ class QuotationPriceTests(unittest.TestCase):
             }
         )
         self.policy = ResolvedPolicyDTO(
-            weight_kg=Decimal("1"),
+            weight_lb=Decimal("1"),
             arancel_percentage=Decimal("0.1"),
             margin_percentage=Decimal("1.2"),
             courier=False,
@@ -120,7 +120,7 @@ class QuotationPriceTests(unittest.TestCase):
         )
         strategy = Mock()
         strategy.get_product_data.return_value = Mock(
-            weight_kg=Decimal("1"),
+            weight_lb=Decimal("1"),
             courier=False,
             partida=None,
             cabys=None,
@@ -163,7 +163,7 @@ class QuotationPriceTests(unittest.TestCase):
         )
         strategy = Mock()
         strategy.get_product_data.return_value = Mock(
-            weight_kg=Decimal("1"),
+            weight_lb=Decimal("1"),
             courier=False,
             partida=None,
             cabys=None,

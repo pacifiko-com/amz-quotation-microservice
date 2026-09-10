@@ -99,10 +99,7 @@ class CostaRicaQuotationService:
             mode = "poliza"
             notes.append("Calculadora CR en modo póliza (keys poliza_*).")
 
-        # Las tarifas están expresadas por kilo, así que el peso se redondea
-        # hacia arriba antes de multiplicar.
-        weight_kg = policy.weight_kg.to_integral_value(rounding=ROUND_CEILING)
-        notes.append(f"Peso {policy.weight_kg} kg redondeado a {weight_kg} kg.")
+        weight_lb = policy.weight_lb
 
         # Este componente es opcional y se apaga con un flag de configuración.
         if settings.boolean("tax_usa"):
@@ -119,7 +116,7 @@ class CostaRicaQuotationService:
         customs_insurance = amazon_price_usd * settings.decimal(
             f"{mode}_seguro_aduanas"
         )
-        customs_freight = weight_kg * settings.decimal(f"{mode}_flete_aduana_kg")
+        customs_freight = weight_lb * settings.decimal(f"{mode}_flete_aduana_kg")
         cif = amazon_price_usd + customs_insurance + customs_freight
         notes.append(
             f"CIF = Amazon + {mode}_seguro_aduanas + {mode}_flete_aduana_kg."
@@ -135,7 +132,7 @@ class CostaRicaQuotationService:
         notes.append("Ley 6946 desde oc_setting ley_6946 sobre CIF.")
 
         # Estos componentes no reutilizan el subtotal anterior.
-        real_freight = weight_kg * settings.decimal(f"{mode}_flete_kg")
+        real_freight = weight_lb * settings.decimal(f"{mode}_flete_kg")
         fuel_fee = real_freight * settings.decimal(f"{mode}_fee_combustible")
         clearance = settings.decimal(f"{mode}_desaduanaje")
         freight_insurance = amazon_price_usd * settings.decimal(
