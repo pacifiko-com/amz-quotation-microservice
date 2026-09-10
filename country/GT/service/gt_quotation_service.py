@@ -206,12 +206,13 @@ class GuatemalaQuotationService:
             + import_iva
             + freight_usd
             + danger_usd
+            + insurance_usd
         )
         notes.extend(
             _operation_notes(
                 "cost_usd",
-                "amazon_price_usd + customs_clearance + tariff_usd + import_iva + freight_usd + danger_usd",
-                f"{amazon_price_usd} + {customs_clearance} + {tariff_usd} + {import_iva} + {freight_usd} + {danger_usd} = {cost_usd}",
+                "amazon_price_usd + customs_clearance + tariff_usd + import_iva + freight_usd + danger_usd + insurance_usd",
+                f"{amazon_price_usd} + {customs_clearance} + {tariff_usd} + {import_iva} + {freight_usd} + {danger_usd} + {insurance_usd} = {cost_usd}",
             )
         )
 
