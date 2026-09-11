@@ -103,14 +103,25 @@ class GuatemalaQuotationService:
         # cálculo es idéntico para courier y no courier.
         if policy.courier:
             freight_key = "tarifa_de_flete_courier"
-            clearance_key = "courier_desaduanaje"
+            customs_freight_key = "courier_flete_aduana_kg"
+            customs_clearance_key = "courier_desaduanaje"
+            freight_insurance_key = "courier_seguro_flete"
+            customs_insurance_key = "courier_seguro_aduanas"
             notes.append("Calculadora GT en modo courier.")
         else:
             freight_key = "tarifa_de_flete"
-            clearance_key = "desaduanaje"
+            customs_freight_key = "poliza_flete_aduana_kg"
+            customs_clearance_key = "desaduanaje"
+            freight_insurance_key = "poliza_seguro_flete"
+            customs_insurance_key = "poliza_seguro_aduanas"
             notes.append("Calculadora GT en modo no courier.")
+
         freight_rate = settings.decimal(freight_key)
-        customs_clearance = settings.decimal(clearance_key)
+        customs_freight = settings.decimal(customs_freight_key)
+        customs_clearance = settings.decimal(customs_clearance_key)
+        freight_insurance = settings.decimal(freight_insurance_key)
+        customs_insurance = settings.decimal(customs_insurance_key)
+
         notes.extend(
             _operation_notes(
                 "freight_rate",
@@ -121,10 +132,32 @@ class GuatemalaQuotationService:
         notes.extend(
             _operation_notes(
                 "customs_clearance",
-                f"settings.{clearance_key}",
+                f"settings.{customs_clearance_key}",
                 f"{customs_clearance}",
             )
         )
+        notes.extend(
+            _operation_notes(
+                "customs_freight",
+                f"settings.{customs_freight_key}",
+                f"{customs_freight}",
+            )
+        )
+        notes.extend(
+            _operation_notes(
+                "customs_insurance",
+                f"settings.{customs_insurance_key}",
+                f"{customs_insurance}",
+            )
+        )
+        notes.extend(
+            _operation_notes(
+                "freight_insurance",
+                f"settings.{freight_insurance_key}",
+                f"{freight_insurance}",
+            )
+        )
+
         freight_usd = weight_lb * freight_rate
         notes.extend(
             _operation_notes(
@@ -133,52 +166,74 @@ class GuatemalaQuotationService:
                 f"{weight_lb} * {freight_rate} = {freight_usd}",
             )
         )
-        insurance_rate = settings.decimal("seguro_valor_producto")
-        insurance_usd = amazon_price_usd * insurance_rate
+        customs_freight_usd = weight_lb * customs_freight
         notes.extend(
             _operation_notes(
-                "insurance_usd",
-                "amazon_price_usd * insurance_rate",
-                f"{amazon_price_usd} * {insurance_rate} = {insurance_usd}",
+                "customs_freight_usd",
+                "weight_lb * customs_freight",
+                f"{weight_lb} * {customs_freight} = {customs_freight_usd}",
+            )
+        )
+        
+        freight_insurance_usd = weight_lb * freight_insurance
+        notes.extend(
+            _operation_notes(
+                "freight_insurance_usd",
+                "weight_lb * freight_insurance",
+                f"{weight_lb} * {freight_insurance} = {freight_insurance_usd}",
+            )
+        )
+        customs_insurance_usd = weight_lb * customs_insurance
+        notes.extend(
+            _operation_notes(
+                "customs_insurance_usd",
+                "weight_lb * customs_insurance",
+                f"{weight_lb} * {customs_insurance} = {customs_insurance_usd}",
             )
         )
 
-        # Esta suma se guarda porque los dos pasos siguientes la reutilizan.
-        tariff_base = amazon_price_usd + freight_usd + insurance_usd
+        tariff_base_cif = amazon_price_usd + customs_freight_usd + customs_insurance_usd
         notes.extend(
             _operation_notes(
-                "tariff_base",
-                "amazon_price_usd + freight_usd + insurance_usd",
-                f"{amazon_price_usd} + {freight_usd} + {insurance_usd} = {tariff_base}",
+                "tariff_base_cif",
+                "amazon_price_usd + customs_freight_usd + customs_insurance_usd",
+                f"{amazon_price_usd} + {customs_freight_usd} + {customs_insurance_usd} = {tariff_base_cif}",
             )
         )
-        tariff_usd = tariff_base * policy.arancel_percentage
+        dai = tariff_base_cif * policy.arancel_percentage
         notes.extend(
             _operation_notes(
-                "tariff_usd",
-                "tariff_base * arancel_percentage",
-                f"{tariff_base} * {policy.arancel_percentage} = {tariff_usd}",
+                "dai",
+                "tariff_base_cif * arancel_percentage",
+                f"{tariff_base_cif} * {policy.arancel_percentage} = {dai}",
             )
         )
 
-        # Este componente solo entra cuando courier es true; si no, queda en 0.
+        # El IVA de aduanas solo se aplica en el modo courier.
         if policy.courier:
             import_iva_rate = settings.decimal("iva_importacion")
-            import_iva = (tariff_base + tariff_usd) * import_iva_rate
             notes.extend(
                 _operation_notes(
-                    "import_iva",
-                    "(tariff_base + tariff_usd) * import_iva_rate",
-                    f"({tariff_base} + {tariff_usd}) * {import_iva_rate} = {import_iva}",
+                    "import_iva_rate",
+                    "settings.iva_importacion",
+                    f"{import_iva_rate}",
+                )
+            )
+            import_iva_usd = (tariff_base_cif + dai) * import_iva_rate
+            notes.extend(
+                _operation_notes(
+                    "import_iva_usd",
+                    "(tariff_base_cif + dai) * import_iva_rate",
+                    f"({tariff_base_cif} + {dai}) * {import_iva_rate} = {import_iva_usd}",
                 )
             )
         else:
-            import_iva = Decimal("0")
+            import_iva_usd = Decimal("0")
             notes.extend(
                 _operation_notes(
-                    "import_iva",
+                    "import_iva_usd",
                     "0 (non-courier)",
-                    f"{import_iva}",
+                    f"{import_iva_usd}",
                 )
             )
         if policy.danger_good_active:
@@ -201,18 +256,18 @@ class GuatemalaQuotationService:
             )
         cost_usd = (
             amazon_price_usd
-            + customs_clearance
-            + tariff_usd
-            + import_iva
+            + dai
+            + import_iva_usd
             + freight_usd
+            + customs_clearance
+            + freight_insurance_usd
             + danger_usd
-            + insurance_usd
         )
         notes.extend(
             _operation_notes(
                 "cost_usd",
-                "amazon_price_usd + customs_clearance + tariff_usd + import_iva + freight_usd + danger_usd + insurance_usd",
-                f"{amazon_price_usd} + {customs_clearance} + {tariff_usd} + {import_iva} + {freight_usd} + {danger_usd} + {insurance_usd} = {cost_usd}",
+                "amazon_price_usd + dai + import_iva_usd + freight_usd + customs_clearance + freight_insurance_usd + danger_usd",
+                f"{amazon_price_usd} + {dai} + {import_iva_usd} + {freight_usd} + {customs_clearance} + {freight_insurance_usd} + {danger_usd} = {cost_usd}",
             )
         )
 
@@ -244,8 +299,8 @@ class GuatemalaQuotationService:
             notes.extend(
                 _operation_notes(
                     "iva_base_usd",
-                    "freight_usd + cost_usd * margin_markup + customs_clearance + danger_usd",
-                    f"{freight_usd} + {cost_usd} * {margin_markup} + {customs_clearance} + {danger_usd} = {iva_base_usd}",
+                    "freight_usd + (cost_usd * margin_markup) + customs_clearance + danger_usd",
+                    f"{freight_usd} + ({cost_usd} * {margin_markup}) + {customs_clearance} + {danger_usd} = {iva_base_usd}",
                 )
             )
         else:
@@ -258,6 +313,13 @@ class GuatemalaQuotationService:
                 )
             )
         sales_iva_rate = settings.decimal("default_iva_venta")
+        notes.extend(
+            _operation_notes(
+                "sales_iva_rate",
+                "settings.default_iva_venta",
+                f"{sales_iva_rate}",
+            )
+        )
         sales_iva_usd = iva_base_usd * sales_iva_rate
         notes.extend(
             _operation_notes(

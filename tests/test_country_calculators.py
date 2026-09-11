@@ -123,6 +123,12 @@ class CountryCalculatorTests(unittest.TestCase):
                 "tarifa_de_flete_courier": "3",
                 "desaduanaje": "1",
                 "courier_desaduanaje": "0",
+                "poliza_flete_aduana_kg": "0",
+                "courier_flete_aduana_kg": "0",
+                "poliza_seguro_aduanas": "0",
+                "courier_seguro_aduanas": "0",
+                "poliza_seguro_flete": "0",
+                "courier_seguro_flete": "0",
                 "seguro_valor_producto": "0.01",
                 "iva_importacion": "0.12",
                 "danger_dolar": "5",
@@ -151,11 +157,11 @@ class CountryCalculatorTests(unittest.TestCase):
             )
         )
 
-        self.assertEqual(result.cost_usd, Decimal("113.300000"))
-        self.assertEqual(result.price_usd, Decimal("152.275200"))
-        self.assertEqual(result.price_local, Decimal("1145"))
-        self.assertEqual(result.price_without_tax_usd, Decimal("135.960000"))
-        self.assertEqual(result.price_without_tax_local, Decimal("1019.700000"))
+        self.assertEqual(result.cost_usd, Decimal("113.00"))
+        self.assertEqual(result.price_usd, Decimal("151.87200"))
+        self.assertEqual(result.price_local, Decimal("1140"))
+        self.assertEqual(result.price_without_tax_usd, Decimal("135.6000"))
+        self.assertEqual(result.price_without_tax_local, Decimal("1017.00000"))
 
     def test_costa_rica_poliza_golden_case(self) -> None:
         """CR applies CIF, DAI, freight, Ley 6946, sales VAT and ceil-to-ten."""
