@@ -44,10 +44,13 @@ class Settings:
     Attributes:
         databases: MySQL configuration keyed by country code.
         log_level: Logging verbosity (DEBUG, INFO, WARNING, ERROR).
+        oc_setting_cache_ttl_seconds: Seconds to reuse ``oc_setting`` in
+            process memory before reloading from MySQL.
     """
 
     databases: dict[str, DatabaseSettings]
     log_level: str
+    oc_setting_cache_ttl_seconds: int
 
 
 @lru_cache(maxsize=1)
@@ -64,7 +67,22 @@ def get_settings() -> Settings:
             for country in ("GT", "CR")
         },
         log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
+        oc_setting_cache_ttl_seconds=_load_oc_setting_cache_ttl_seconds(),
     )
+
+
+def _load_oc_setting_cache_ttl_seconds() -> int:
+    """Parse cache TTL from the environment, defaulting to one hour.
+
+    Returns:
+        int: Seconds to keep ``oc_setting`` values. ``0`` or a negative
+            value disables reuse between calls.
+    """
+    raw_value = os.getenv("OC_SETTING_CACHE_TTL_SECONDS", "300")
+    try:
+        return int(raw_value)
+    except ValueError:
+        return 300
 
 
 def get_database_settings(country: str) -> DatabaseSettings:

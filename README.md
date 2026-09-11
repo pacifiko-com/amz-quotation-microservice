@@ -334,6 +334,8 @@ Variables de entorno:
 - `DB_CR_HOST`, `DB_CR_PORT`, `DB_CR_NAME`, `DB_CR_USER`,
   `DB_CR_PASSWORD`, `DB_CR_CONNECT_TIMEOUT`.
 - `LOG_LEVEL`.
+- `OC_SETTING_CACHE_TTL_SECONDS` (segundos de reutilización de
+  `oc_setting` en memoria; default `300`. `0` recarga en cada llamada).
 - `SECRETS_MANAGER_SECRET_ARN` (solo en Lambda; el JSON del secreto debe
   incluir las keys `DB_GT_*` y `DB_CR_*`).
 
@@ -368,7 +370,8 @@ con ejecución básica, acceso a la VPC y `secretsmanager:GetSecretValue`
 únicamente sobre el secreto de ese ambiente.
 
 `SecretArn` identifica el secreto de Secrets Manager. El valor debe ser un
-JSON con las keys `DB_GT_*` y `DB_CR_*` (y opcionalmente `LOG_LEVEL`). Al
+JSON con las keys `DB_GT_*` y `DB_CR_*` (y opcionalmente `LOG_LEVEL` y
+`OC_SETTING_CACHE_TTL_SECONDS`). Al
 iniciar, `config/secrets_loader.py` copia esas keys al entorno y
 `config/settings.py` las lee. El runtime de Lambda ya incluye boto3. Las
 Lambdas están en subnets privadas: Secrets Manager requiere NAT o un VPC
@@ -395,7 +398,8 @@ Ejemplo de secreto JSON:
   "DB_CR_NAME": "qa_cr",
   "DB_CR_USER": "quotation",
   "DB_CR_PASSWORD": "...",
-  "DB_CR_CONNECT_TIMEOUT": "10"
+  "DB_CR_CONNECT_TIMEOUT": "10",
+  "OC_SETTING_CACHE_TTL_SECONDS": "300"
 }
 ```
 

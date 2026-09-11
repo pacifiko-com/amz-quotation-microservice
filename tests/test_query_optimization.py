@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import os
 import unittest
 from unittest.mock import MagicMock, patch
 
+from config.settings import get_settings as load_app_settings
 from country.GT.repository.gt_quotation_repository import GuatemalaQuotationRepository
 from country.GT.strategy import GuatemalaQuotationStrategy
 from database.settings_cache import clear_settings_cache
@@ -24,17 +26,66 @@ class QueryOptimizationTests(unittest.TestCase):
     def tearDown(self) -> None:
         """Drop cached oc_setting values between tests."""
         clear_settings_cache()
+        load_app_settings.cache_clear()
 
     @patch("country.GT.strategy.GuatemalaQuotationRepository.get_settings")
-    def test_settings_are_loaded_once_per_process(self, get_settings) -> None:
+    def test_settings_are_loaded_once_per_process(self, repository_get_settings) -> None:
         """Warm invocations reuse oc_setting without a second query."""
-        get_settings.return_value = CountrySettingsDTO({"margen": "1.1"})
+        repository_get_settings.return_value = CountrySettingsDTO({"margen": "1.1"})
 
         first = GuatemalaQuotationStrategy().resolve_settings()
         second = GuatemalaQuotationStrategy().resolve_settings()
 
         self.assertIs(first, second)
-        get_settings.assert_called_once()
+        repository_get_settings.assert_called_once()
+
+    @patch("country.GT.strategy.GuatemalaQuotationRepository.get_settings")
+    def test_settings_are_reloaded_after_ttl_expires(
+        self,
+        repository_get_settings,
+    ) -> None:
+        """Expired oc_setting values are fetched again from MySQL."""
+        repository_get_settings.side_effect = [
+            CountrySettingsDTO({"margen": "1.1"}),
+            CountrySettingsDTO({"margen": "1.2"}),
+        ]
+        clock = {"now": 0.0}
+
+        with patch.dict(os.environ, {"OC_SETTING_CACHE_TTL_SECONDS": "60"}):
+            load_app_settings.cache_clear()
+            with patch(
+                "database.settings_cache.monotonic",
+                side_effect=lambda: clock["now"],
+            ):
+                first = GuatemalaQuotationStrategy().resolve_settings()
+                clock["now"] = 59.0
+                still_fresh = GuatemalaQuotationStrategy().resolve_settings()
+                clock["now"] = 60.0
+                expired = GuatemalaQuotationStrategy().resolve_settings()
+
+        self.assertIs(first, still_fresh)
+        self.assertIsNot(first, expired)
+        self.assertEqual(expired.require("margen"), "1.2")
+        self.assertEqual(repository_get_settings.call_count, 2)
+
+    @patch("country.GT.strategy.GuatemalaQuotationRepository.get_settings")
+    def test_settings_are_not_reused_when_ttl_is_zero(
+        self,
+        repository_get_settings,
+    ) -> None:
+        """TTL zero disables reuse between handler invocations."""
+        repository_get_settings.side_effect = [
+            CountrySettingsDTO({"margen": "1.1"}),
+            CountrySettingsDTO({"margen": "1.2"}),
+        ]
+
+        with patch.dict(os.environ, {"OC_SETTING_CACHE_TTL_SECONDS": "0"}):
+            load_app_settings.cache_clear()
+            first = GuatemalaQuotationStrategy().resolve_settings()
+            second = GuatemalaQuotationStrategy().resolve_settings()
+
+        self.assertIsNot(first, second)
+        self.assertEqual(repository_get_settings.call_count, 2)
 
     @patch("repository.base_quotation_repository.get_connection")
     def test_unspsc_codes_are_loaded_in_one_query(self, connection) -> None:
