@@ -181,12 +181,12 @@ class GuatemalaQuotationService:
             )
         )
         
-        freight_insurance_usd = weight_lb * freight_insurance
+        freight_insurance_usd = amazon_price_usd * freight_insurance
         notes.extend(
             _operation_notes(
                 "freight_insurance_usd",
-                "weight_lb * freight_insurance",
-                f"{weight_lb} * {freight_insurance} = {freight_insurance_usd}",
+                "amazon_price_usd * freight_insurance",
+                f"{amazon_price_usd} * {freight_insurance} = {freight_insurance_usd}",
             )
         )
         customs_insurance_usd = amazon_price_usd * customs_insurance
