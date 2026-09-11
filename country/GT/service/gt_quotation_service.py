@@ -61,6 +61,12 @@ GT_SETTING_KEYS = (
     "promise_missing_delivery_tier",
     "promise_below_range_tier",
     "promise_fallback_tier",
+    "courier_flete_aduana_kg",
+    "poliza_flete_aduana_kg",
+    "courier_seguro_aduanas",
+    "courier_seguro_flete",
+    "poliza_seguro_aduanas",
+    "poliza_seguro_flete",
 )
 
 
