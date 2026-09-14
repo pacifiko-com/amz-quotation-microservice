@@ -13,6 +13,7 @@ from DTO.quotation_context_dto import (
     SelectedOfferDTO,
 )
 from Utils.price_rounding import round_price
+from const import KG_TO_LB
 
 
 def _operation_notes(name: str, formula: str, values: str) -> tuple[str, str]:
@@ -113,6 +114,18 @@ class CostaRicaQuotationService:
                 f"{weight_lb}",
             )
         )
+
+        weight_kg = (weight_lb / KG_TO_LB).to_integral_value(
+            rounding=ROUND_CEILING
+        )
+        notes.extend(
+            _operation_notes(
+                "weight_kg",
+                f"weight_lb / {KG_TO_LB} (rounded up)",
+                f"{weight_kg}",
+            )
+        )
+        
         notes.extend(
             _operation_notes(
                 "amazon_price_usd",
@@ -154,12 +167,12 @@ class CostaRicaQuotationService:
             )
         )
         customs_freight_rate = settings.decimal(f"{mode}_flete_aduana_kg")
-        customs_freight = weight_lb * customs_freight_rate
+        customs_freight = weight_kg * customs_freight_rate
         notes.extend(
             _operation_notes(
                 "customs_freight",
-                f"weight_lb * {mode}_flete_aduana_kg",
-                f"{weight_lb} * {customs_freight_rate} = {customs_freight}",
+                f"weight_kg * {mode}_flete_aduana_kg",
+                f"{weight_kg} * {customs_freight_rate} = {customs_freight}",
             )
         )
         cif = amazon_price_usd + customs_insurance + customs_freight
@@ -202,12 +215,12 @@ class CostaRicaQuotationService:
 
         # Estos componentes no reutilizan el subtotal anterior.
         real_freight_rate = settings.decimal(f"{mode}_flete_kg")
-        real_freight = weight_lb * real_freight_rate
+        real_freight = weight_kg * real_freight_rate
         notes.extend(
             _operation_notes(
                 "real_freight",
-                f"weight_lb * {mode}_flete_kg",
-                f"{weight_lb} * {real_freight_rate} = {real_freight}",
+                f"weight_kg * {mode}_flete_kg",
+                f"{weight_kg} * {real_freight_rate} = {real_freight}",
             )
         )
         fuel_rate = settings.decimal(f"{mode}_fee_combustible")
