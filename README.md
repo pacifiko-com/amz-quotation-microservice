@@ -113,7 +113,11 @@ Reglas de forma:
   `false` o se omite, esa pasada no corre (cotizador GT).
 - `products`: arreglo no vacío.
 - `product_id`: entero requerido.
-- `amz_weight_kg`: número no negativo requerido.
+- Peso Amazon: exactamente uno de `amz_weight_kg`, `amz_weight_lb` o
+  `amz_weight_oz` (número no negativo). Si hay más de uno no nulo, la
+  petición es inválida. Libras se convierten a kg dividiendo entre
+  `2.20462`; onzas, dividiendo entre `35.274`. Internamente el peso se
+  maneja siempre en kg.
 - `pac_product_weight`: número no negativo opcional; reemplaza la consulta de
   peso Pacifiko, pero el peso final sigue siendo el mayor entre Amazon/Pacifiko.
 - `pac_product_courier`: boolean opcional; reemplaza `oc_product.courier`.
@@ -184,7 +188,7 @@ Reglas de forma:
 
 ### Guatemala
 
-- Peso: `amz_weight_kg` se convierte a lb, se compara con Pacifiko (ya en lb)
+- Peso: el peso Amazon del request (ya en kg) se convierte a lb, se compara con Pacifiko (ya en lb)
   y se propaga `weight_lb`. La calculadora no vuelve a convertir.
 - Courier base: override/producto no cero; en otro caso UNSPSC.
 - Con partida: courier de partida. Si es courier, arancel/restricción permanecen

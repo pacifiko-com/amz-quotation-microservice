@@ -18,7 +18,8 @@ class ProductFactsDTO:
 
     Attributes:
         product_id: Pacifiko product identifier.
-        amz_weight_kg: Raw Amazon item weight in kilograms.
+        amz_weight_kg: Amazon item weight in kilograms after converting
+            ``amz_weight_kg``, ``amz_weight_lb`` or ``amz_weight_oz``.
         unspsc: UNSPSC code used to resolve import policy, or ``None``
             to apply country defaults without recording an unknown code.
         pac_product_weight: Optional Pacifiko weight override in pounds.
@@ -234,7 +235,7 @@ def _product_facts_fields(payload: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "product_id": product_id,
-        "amz_weight_kg": _required_decimal(payload.get("amz_weight_kg"), "amz_weight_kg"),
+        "amz_weight_kg": _resolve_amz_weight_kg(payload),
         "unspsc": unspsc,
         "pac_product_weight": _optional_decimal(
             payload.get("pac_product_weight"),
@@ -244,6 +245,47 @@ def _product_facts_fields(payload: dict[str, Any]) -> dict[str, Any]:
         "pac_product_partida": partida or None,
     }
 
+
+
+_LB_TO_KG = Decimal("2.20462")
+_OZ_TO_KG = Decimal("35.274")
+
+
+def _resolve_amz_weight_kg(payload: dict[str, Any]) -> Decimal:
+    """Convert the exclusive Amazon weight field to kilograms.
+
+    Args:
+        payload: One element of the ``products`` array.
+
+    Returns:
+        Decimal: Weight in kilograms used by all downstream calculations.
+    """
+    weight_kg = _optional_decimal(payload.get("amz_weight_kg"), "amz_weight_kg")
+    weight_lb = _optional_decimal(payload.get("amz_weight_lb"), "amz_weight_lb")
+    weight_oz = _optional_decimal(payload.get("amz_weight_oz"), "amz_weight_oz")
+    provided = [
+        name
+        for name, value in (
+            ("amz_weight_kg", weight_kg),
+            ("amz_weight_lb", weight_lb),
+            ("amz_weight_oz", weight_oz),
+        )
+        if value is not None
+    ]
+    if len(provided) > 1:
+        raise RequestValidationError(
+            "Only one of amz_weight_kg, amz_weight_lb or amz_weight_oz may be provided."
+        )
+    if not provided:
+        raise RequestValidationError(
+            "One of amz_weight_kg, amz_weight_lb or amz_weight_oz is required."
+        )
+    if weight_lb is not None:
+        return weight_lb / _LB_TO_KG
+    if weight_oz is not None:
+        return weight_oz / _OZ_TO_KG
+    assert weight_kg is not None
+    return weight_kg
 
 def _extract_payload(event: dict[str, Any]) -> dict[str, Any]:
     """Extract a JSON object from a Lambda event.

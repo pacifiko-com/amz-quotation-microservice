@@ -250,6 +250,104 @@ class ContractTests(unittest.TestCase):
                 }
             )
 
+    def test_request_converts_amz_weight_lb_to_kg(self) -> None:
+        """Pounds are converted to kilograms before any calculation."""
+        request = QuotationRequestDTO.from_event(
+            {
+                "body": {
+                    "country": "GT",
+                    "products": [
+                        {
+                            "product_id": 1,
+                            "amz_weight_lb": "2.20462",
+                            "unspsc": "123",
+                            "amz_offers": [],
+                        }
+                    ],
+                }
+            }
+        )
+
+        self.assertEqual(request.products[0].amz_weight_kg, Decimal("1"))
+
+    def test_request_converts_amz_weight_oz_to_kg(self) -> None:
+        """Ounces are converted to kilograms by dividing by 35.274."""
+        request = QuotationRequestDTO.from_event(
+            {
+                "body": {
+                    "country": "GT",
+                    "products": [
+                        {
+                            "product_id": 1,
+                            "amz_weight_oz": "35.274",
+                            "unspsc": "123",
+                            "amz_offers": [],
+                        }
+                    ],
+                }
+            }
+        )
+
+        self.assertEqual(request.products[0].amz_weight_kg, Decimal("1"))
+
+    def test_request_rejects_multiple_amz_weight_fields(self) -> None:
+        """Only one Amazon weight unit may be non-null."""
+        with self.assertRaises(RequestValidationError):
+            QuotationRequestDTO.from_event(
+                {
+                    "body": {
+                        "country": "GT",
+                        "products": [
+                            {
+                                "product_id": 1,
+                                "amz_weight_kg": 1,
+                                "amz_weight_lb": 2,
+                                "unspsc": "123",
+                                "amz_offers": [],
+                            }
+                        ],
+                    }
+                }
+            )
+
+    def test_request_rejects_missing_amz_weight(self) -> None:
+        """At least one Amazon weight unit is required."""
+        with self.assertRaises(RequestValidationError):
+            QuotationRequestDTO.from_event(
+                {
+                    "body": {
+                        "country": "GT",
+                        "products": [
+                            {
+                                "product_id": 1,
+                                "unspsc": "123",
+                                "amz_offers": [],
+                            }
+                        ],
+                    }
+                }
+            )
+
+    def test_price_request_accepts_amz_weight_oz(self) -> None:
+        """Direct-price products also convert ounces to kilograms."""
+        request = PriceQuotationRequestDTO.from_event(
+            {
+                "body": {
+                    "country": "GT",
+                    "products": [
+                        {
+                            "product_id": 1,
+                            "amz_weight_oz": 35.274,
+                            "unspsc": "123",
+                            "amazon_price_usd": 10,
+                        }
+                    ],
+                }
+            }
+        )
+
+        self.assertEqual(request.products[0].amz_weight_kg, Decimal("1"))
+
     @patch("service.quotation_orchestrator.CountryStrategyFactory.create")
     def test_partial_results_keep_input_order(self, create) -> None:
         """A failed product does not stop later products."""
