@@ -298,15 +298,16 @@ class GuatemalaQuotationService:
             )
             iva_base_usd = (
                 freight_usd
-                + cost_usd * margin_markup
                 + customs_clearance
+                + freight_insurance_usd
                 + danger_usd
+                + cost_usd * margin_markup
             )
             notes.extend(
                 _operation_notes(
                     "iva_base_usd",
-                    "freight_usd + (cost_usd * margin_markup) + customs_clearance + danger_usd",
-                    f"{freight_usd} + ({cost_usd} * {margin_markup}) + {customs_clearance} + {danger_usd} = {iva_base_usd}",
+                    "freight_usd + customs_clearance + freight_insurance_usd + danger_usd + (cost_usd * margin_markup)",
+                    f"{freight_usd} + {customs_clearance} + {freight_insurance_usd} + {danger_usd} + ({cost_usd} * {margin_markup}) = {iva_base_usd}",
                 )
             )
         else:
