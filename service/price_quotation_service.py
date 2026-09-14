@@ -10,6 +10,7 @@ from DTO.quotation_request_dto import (
 )
 from DTO.quotation_response_dto import QuotationResponseDTO, ResultObjectDTO
 from service.quotation_orchestrator import QuotationOrchestrator
+from Utils.exceptions import QuotationError
 
 
 class PriceQuotationService:
@@ -68,23 +69,31 @@ class PriceQuotationService:
             return failed
 
         notes = list(policy.quotation_notes)
-        notes.append(
-            f"Precio Amazon USD del request: {product.amazon_price_usd} "
-            "(sin selección de oferta)."
-        )
-        exchange_rate = strategy.resolve_exchange_rate(settings)
-        notes.append(
-            f"Tasa de cambio {exchange_rate} (estrategia de país / "
-            "oc_setting tipo_de_cambio)."
-        )
-        calculation = self._orchestrator.calculate(
-            strategy,
-            product.amazon_price_usd,
-            policy,
-            exchange_rate,
-            settings,
-        )
-        notes.extend(calculation.quotation_notes)
+        try:
+            notes.append(
+                f"Precio Amazon USD del request: {product.amazon_price_usd} "
+                "(sin selección de oferta)."
+            )
+            exchange_rate = strategy.resolve_exchange_rate(settings)
+            notes.append(
+                f"Tasa de cambio {exchange_rate} (estrategia de país / "
+                "oc_setting tipo_de_cambio)."
+            )
+            calculation = self._orchestrator.calculate(
+                strategy,
+                product.amazon_price_usd,
+                policy,
+                exchange_rate,
+                settings,
+            )
+            notes.extend(calculation.quotation_notes)
+        except (QuotationError, ValueError) as exc:
+            return self._orchestrator.failed_result(
+                product.product_id,
+                str(exc),
+                policy=policy,
+                quotation_notes=notes,
+            )
         return self._orchestrator.priced_success(
             product.product_id,
             policy,

@@ -46,7 +46,7 @@ class ResultObjectDTO:
         restriction: Resolved import restriction.
         partida: Resolved tariff code, when available.
         cabys: Resolved CABYS code, when available.
-        quotation_notes: Decision trail for a successful quotation.
+        quotation_notes: Decision trail accumulated before success or failure.
     """
 
     success: bool

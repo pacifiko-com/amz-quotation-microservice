@@ -206,17 +206,17 @@ class QuotationOrchestrator:
                 product.product_id,
                 exc,
             )
-            return ResultObjectDTO(
-                success=False,
-                message=str(exc),
-                product_id=product.product_id,
+            return QuotationOrchestrator.failed_result(
+                product.product_id,
+                str(exc),
+                quotation_notes=getattr(exc, "quotation_notes", ()),
             )
         except Exception as exc:
             logger.exception("Product quotation failed product_id=%s", product.product_id)
-            return ResultObjectDTO(
-                success=False,
-                message=_unexpected_product_error_message(exc),
-                product_id=product.product_id,
+            return QuotationOrchestrator.failed_result(
+                product.product_id,
+                _unexpected_product_error_message(exc),
+                quotation_notes=getattr(exc, "quotation_notes", ()),
             )
 
     def resolve_policy(
@@ -449,14 +449,50 @@ class QuotationOrchestrator:
             message = "Product exceeds the configured weight limit."
         else:
             return None
+        return QuotationOrchestrator.failed_result(
+            product_id,
+            message,
+            policy=policy,
+        )
+
+    @staticmethod
+    def failed_result(
+        product_id: int,
+        message: str,
+        *,
+        policy: ResolvedPolicyDTO | None = None,
+        offer_id: str = "",
+        quotation_notes: Sequence[str] | None = None,
+    ) -> ResultObjectDTO:
+        """Build a failed product result, keeping any notes already collected.
+
+        Args:
+            product_id: Pacifiko product identifier.
+            message: Product-level failure reason.
+            policy: Resolved policy when the failure happens after it.
+            offer_id: Selected Amazon offer identifier when applicable.
+            quotation_notes: Decision trail up to the failure. Defaults to
+                the policy notes when a policy is present.
+
+        Returns:
+            ResultObjectDTO: Isolated product failure.
+        """
+        if quotation_notes is not None:
+            notes = tuple(quotation_notes)
+        elif policy is not None:
+            notes = policy.quotation_notes
+        else:
+            notes = ()
         return ResultObjectDTO(
             success=False,
             message=message,
             product_id=product_id,
-            courier=policy.courier,
-            restriction=policy.restriction,
-            partida=policy.partida,
-            cabys=policy.cabys,
+            offer_id=offer_id,
+            courier=policy.courier if policy is not None else None,
+            restriction=policy.restriction if policy is not None else None,
+            partida=policy.partida if policy is not None else None,
+            cabys=policy.cabys if policy is not None else None,
+            quotation_notes=notes,
         )
 
     @staticmethod

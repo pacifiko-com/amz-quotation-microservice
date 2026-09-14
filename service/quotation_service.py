@@ -16,6 +16,7 @@ from DTO.quotation_request_dto import ProductQuotationDTO, QuotationRequestDTO
 from DTO.quotation_response_dto import QuotationResponseDTO, ResultObjectDTO
 from service.offer_selector import OfferSelector
 from service.quotation_orchestrator import QuotationOrchestrator
+from Utils.exceptions import QuotationError
 
 
 class QuotationService:
@@ -89,45 +90,54 @@ class QuotationService:
         # 7. Oferta, tasa y cálculo. La oferta se elige con reglas compartidas;
         # la fórmula la aplica cada país sobre el mismo DTO de entrada.
         notes = list(policy.quotation_notes)
-        offer = self._offer_selector.select(
-            product.amz_offers,
-            settings,
-            prefer_amazon_fulfillment,
-        )
-        if self._is_restricted_offer(offer, settings):
-            return ResultObjectDTO(
-                success=False,
-                message="Amazon offer is restricted.",
-                product_id=product.product_id,
-                offer_id=offer.offer_id,
-                courier=policy.courier,
-                restriction=policy.restriction,
-                partida=policy.partida,
-                cabys=policy.cabys,
+        try:
+            offer = self._offer_selector.select(
+                product.amz_offers,
+                settings,
+                prefer_amazon_fulfillment,
             )
+            notes.extend(offer.quotation_notes)
+            if self._is_restricted_offer(offer, settings):
+                notes.append(
+                    "Oferta Amazon restringida por buying guidance; se aborta "
+                    "la cotización."
+                )
+                return self._orchestrator.failed_result(
+                    product.product_id,
+                    "Amazon offer is restricted.",
+                    policy=policy,
+                    offer_id=offer.offer_id,
+                    quotation_notes=notes,
+                )
 
-        exchange_rate = strategy.resolve_exchange_rate(settings)
-        notes.append(
-            f"Tasa de cambio {exchange_rate} (estrategia de país / "
-            "oc_setting tipo_de_cambio)."
-        )
-        prices = self._resolve_prices(
-            strategy,
-            offer,
-            policy,
-            exchange_rate,
-            settings,
-        )
-        promise = _unpack_promise(
-            strategy.resolve_delivery_promise(
+            exchange_rate = strategy.resolve_exchange_rate(settings)
+            notes.append(
+                f"Tasa de cambio {exchange_rate} (estrategia de país / "
+                "oc_setting tipo_de_cambio)."
+            )
+            prices = self._resolve_prices(
+                strategy,
                 offer,
-                policy.courier,
+                policy,
+                exchange_rate,
                 settings,
             )
-        )
-        notes.extend(offer.quotation_notes)
-        notes.extend(prices.quotation_notes)
-        notes.extend(promise.quotation_notes)
+            promise = _unpack_promise(
+                strategy.resolve_delivery_promise(
+                    offer,
+                    policy.courier,
+                    settings,
+                )
+            )
+            notes.extend(prices.quotation_notes)
+            notes.extend(promise.quotation_notes)
+        except (QuotationError, ValueError) as exc:
+            return self._orchestrator.failed_result(
+                product.product_id,
+                str(exc),
+                policy=policy,
+                quotation_notes=notes,
+            )
         return self._orchestrator.priced_success(
             product.product_id,
             policy,

@@ -175,9 +175,10 @@ Reglas de forma:
 - `currency_code`: código ISO de la moneda local (`GTQ` o `CRC`).
 - `success` global es `true` solamente si todos los resultados son exitosos.
 - Se conserva `Message` con mayúscula dentro de cada resultado por contrato.
-- `quotation_notes`: arreglo de textos en cada producto cotizado con éxito. Cada
-  nota se escribe en el `if` que tomó la decisión (UNSPSC, partida, courier,
-  calculadora, oferta, special, promesa). En fallos el arreglo va vacío.
+- `quotation_notes`: arreglo de textos en cada producto. Cada nota se escribe
+  en el `if` que tomó la decisión (UNSPSC, partida, courier, calculadora,
+  oferta, special, promesa). En fallos se incluyen las notas acumuladas hasta
+  el rechazo para validar el proceso que llevó al error.
 
 ## Precedencia por país
 

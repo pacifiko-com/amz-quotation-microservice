@@ -151,6 +151,10 @@ class QuotationPriceTests(unittest.TestCase):
         self.assertFalse(result.success)
         self.assertEqual(result.message, "Amazon offer is restricted.")
         self.assertEqual(result.offer_id, "offer-1")
+        self.assertTrue(result.quotation_notes)
+        self.assertTrue(
+            any("restringida" in note for note in result.quotation_notes)
+        )
         strategy.calculate.assert_not_called()
 
     def test_direct_price_quotes_without_offer_selection(self) -> None:
