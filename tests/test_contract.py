@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from country.country_strategy_factory import CountryStrategyFactory
 from DTO.quotation_context_dto import CountrySettingsDTO
+from const import KG_TO_LB, OZ_PER_KG
 from DTO.quotation_request_dto import (
     PriceQuotationRequestDTO,
     QuotationRequestDTO,
@@ -259,7 +260,7 @@ class ContractTests(unittest.TestCase):
                     "products": [
                         {
                             "product_id": 1,
-                            "amz_weight_lb": "2.20462",
+                            "amz_weight_lb": str(KG_TO_LB),
                             "unspsc": "123",
                             "amz_offers": [],
                         }
@@ -279,7 +280,7 @@ class ContractTests(unittest.TestCase):
                     "products": [
                         {
                             "product_id": 1,
-                            "amz_weight_oz": "35.274",
+                            "amz_weight_oz": str(OZ_PER_KG),
                             "unspsc": "123",
                             "amz_offers": [],
                         }
@@ -337,7 +338,7 @@ class ContractTests(unittest.TestCase):
                     "products": [
                         {
                             "product_id": 1,
-                            "amz_weight_oz": 35.274,
+                            "amz_weight_oz": OZ_PER_KG,
                             "unspsc": "123",
                             "amazon_price_usd": 10,
                         }

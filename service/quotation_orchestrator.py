@@ -18,6 +18,7 @@ from DTO.quotation_context_dto import (
     TariffDataDTO,
     UnspscDataDTO,
 )
+from const import KG_TO_LB
 from DTO.quotation_request_dto import ProductFactsDTO
 from DTO.quotation_response_dto import QuotationResponseDTO, ResultObjectDTO
 from Utils.exceptions import QuotationError
@@ -29,8 +30,6 @@ QuoteProductFn = Callable[
     [CountryQuotationStrategy, ProductFactsDTO, CountrySettingsDTO],
     ResultObjectDTO,
 ]
-
-_KG_TO_LB = Decimal("2.20462")
 
 
 class QuotationOrchestrator:
@@ -292,7 +291,7 @@ class QuotationOrchestrator:
             stored_weight = None
             notes.append("No hay peso Pacifiko; se usa solo el peso Amazon.")
         
-        amz_weight_lb = (product.amz_weight_kg * _KG_TO_LB).to_integral_value(
+        amz_weight_lb = (product.amz_weight_kg * KG_TO_LB).to_integral_value(
             rounding=ROUND_CEILING
         )
         weight_lb = max(

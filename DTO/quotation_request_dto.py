@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from const import KG_TO_LB, OZ_PER_KG
+
 
 class RequestValidationError(ValueError):
     """Raised when the Lambda payload does not match the public contract."""
@@ -246,11 +248,6 @@ def _product_facts_fields(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-
-_LB_TO_KG = Decimal("2.20462")
-_OZ_TO_KG = Decimal("35.274")
-
-
 def _resolve_amz_weight_kg(payload: dict[str, Any]) -> Decimal:
     """Convert the exclusive Amazon weight field to kilograms.
 
@@ -281,9 +278,9 @@ def _resolve_amz_weight_kg(payload: dict[str, Any]) -> Decimal:
             "One of amz_weight_kg, amz_weight_lb or amz_weight_oz is required."
         )
     if weight_lb is not None:
-        return weight_lb / _LB_TO_KG
+        return weight_lb / KG_TO_LB
     if weight_oz is not None:
-        return weight_oz / _OZ_TO_KG
+        return weight_oz / OZ_PER_KG
     assert weight_kg is not None
     return weight_kg
 
