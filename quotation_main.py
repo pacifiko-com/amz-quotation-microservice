@@ -17,9 +17,10 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             handler signature and not used by business logic.
 
     Returns:
-        dict[str, Any]: Always contains ``success``, ``message`` and
-            ``result``. Root validation/configuration failures return an
-            empty result array.
+        dict[str, Any]: Direct invokes return ``success``, ``message`` and
+            ``result``. API Gateway proxy events wrap that payload in
+            ``statusCode``, ``headers`` and a JSON ``body``. Root
+            validation/configuration failures return an empty result array.
     """
     return handle_quotation_event(
         event,
