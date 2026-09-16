@@ -114,6 +114,30 @@ class CountryCalculatorTests(unittest.TestCase):
 
         self.assertEqual(result.tier, 1)
 
+    def test_gt_below_range_ignores_preorder_tier_bounds(self) -> None:
+        """Preorder ranges do not lower the assignable minimum."""
+        today = datetime.now(ZoneInfo("America/Guatemala")).date()
+        settings = CountrySettingsDTO(
+            {
+                **self._gt_promise_settings().values,
+                "global_store_promises": (
+                    "{'4':'1-5 days','1':'6-12 days','2':'13-18 days'}"
+                ),
+            }
+        )
+        offer = self._offer(
+            "In Stock.",
+            f"{today.isoformat()}T12:00:00-06:00",
+        )
+
+        result = GuatemalaQuotationService().resolve_delivery_promise(
+            offer,
+            False,
+            settings,
+        )
+
+        self.assertEqual(result.tier, 1)
+
     def test_guatemala_non_courier_golden_case(self) -> None:
         """GT applies freight, insured tariff base, margin, VAT and ceil rounding."""
         settings = CountrySettingsDTO(

@@ -438,36 +438,43 @@ class GuatemalaQuotationService:
         # mínimo en adelante". El tier de preventa no se asigna por días.
         ranges = self._promise_ranges(settings.require("global_store_promises"))
         preorder_tier = settings.integer("promise_preorder_tier")
-        lowest_start = min(bounds[0] for bounds in ranges.values())
-        if total_days < lowest_start:
-            tier = settings.integer("promise_below_range_tier")
-            return DeliveryPromiseDTO(
-                tier=tier,
-                quotation_notes=(
-                    f"Promesa GT: {total_days} días (hábiles + "
-                    f"dias_importacion_amz={import_days}) bajo el rango mínimo; "
-                    f"tier {tier} (promise_below_range_tier).",
-                ),
-            )
-        for tier, (low, high) in sorted(ranges.items(), key=lambda item: item[1][0]):
-            if tier == preorder_tier:
-                continue
-            if high is None and total_days >= low:
+        assignable = {
+            tier: bounds
+            for tier, bounds in ranges.items()
+            if tier != preorder_tier
+        }
+        if assignable:
+            lowest_start = min(bounds[0] for bounds in assignable.values())
+            if total_days < lowest_start:
+                tier = settings.integer("promise_below_range_tier")
                 return DeliveryPromiseDTO(
                     tier=tier,
                     quotation_notes=(
-                        f"Promesa GT: {total_days} días caen en rango abierto "
-                        f"desde {low}; tier {tier} (global_store_promises).",
+                        f"Promesa GT: {total_days} días (hábiles + "
+                        f"dias_importacion_amz={import_days}) bajo el rango mínimo; "
+                        f"tier {tier} (promise_below_range_tier).",
                     ),
                 )
-            if high is not None and low <= total_days <= high:
-                return DeliveryPromiseDTO(
-                    tier=tier,
-                    quotation_notes=(
-                        f"Promesa GT: {total_days} días en rango {low}-{high}; "
-                        f"tier {tier} (global_store_promises).",
-                    ),
-                )
+            for tier, (low, high) in sorted(
+                assignable.items(),
+                key=lambda item: item[1][0],
+            ):
+                if high is None and total_days >= low:
+                    return DeliveryPromiseDTO(
+                        tier=tier,
+                        quotation_notes=(
+                            f"Promesa GT: {total_days} días caen en rango abierto "
+                            f"desde {low}; tier {tier} (global_store_promises).",
+                        ),
+                    )
+                if high is not None and low <= total_days <= high:
+                    return DeliveryPromiseDTO(
+                        tier=tier,
+                        quotation_notes=(
+                            f"Promesa GT: {total_days} días en rango {low}-{high}; "
+                            f"tier {tier} (global_store_promises).",
+                        ),
+                    )
         tier = settings.integer("promise_fallback_tier")
         return DeliveryPromiseDTO(
             tier=tier,
