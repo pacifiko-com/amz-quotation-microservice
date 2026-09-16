@@ -15,6 +15,7 @@ except ImportError:
 
 from config.secrets_loader import apply_secrets_from_manager
 from const import COUNTRIES
+from Utils.exceptions import ConfigurationError
 
 
 @dataclass(frozen=True)
@@ -96,8 +97,8 @@ def get_database_settings(country: str) -> DatabaseSettings:
         DatabaseSettings: Credentials and connection options for that country.
 
     Raises:
-        ValueError: If the country is unsupported or its configuration is
-            incomplete.
+        ValueError: If the country is unsupported.
+        ConfigurationError: If required database fields are missing.
     """
     normalized = country.strip().upper()
     database = get_settings().databases.get(normalized)
@@ -114,7 +115,7 @@ def get_database_settings(country: str) -> DatabaseSettings:
     ]
     if missing:
         fields = ", ".join(f"DB_{normalized}_{name}" for name in missing)
-        raise ValueError(f"Missing database configuration: {fields}.")
+        raise ConfigurationError(f"Missing database configuration: {fields}.")
     return database
 
 
