@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from config.settings import get_settings as load_app_settings
+from country.CR.repository.cr_quotation_repository import CostaRicaQuotationRepository
 from country.GT.repository.gt_quotation_repository import GuatemalaQuotationRepository
 from country.GT.strategy import GuatemalaQuotationStrategy
 from database.settings_cache import clear_settings_cache
@@ -116,6 +117,70 @@ class QueryOptimizationTests(unittest.TestCase):
         sql, params = cursor.execute.call_args.args
         self.assertIn("IN", sql)
         self.assertEqual(params, (10, 11))
+
+    @patch("country.GT.repository.gt_quotation_repository.get_connection")
+    def test_gt_tariff_null_courier_and_restriction_are_preserved(
+        self,
+        connection,
+    ) -> None:
+        """NULL restriccion keeps the batch; NULL courier stays None."""
+        cursor = MagicMock()
+        cursor.fetchall.return_value = [
+            {
+                "partida": "001",
+                "arancel_porcentaje": None,
+                "courier": None,
+                "restriccion": None,
+            },
+            {
+                "partida": "002",
+                "arancel_porcentaje": "0.05",
+                "courier": 1,
+                "restriccion": 0,
+            },
+        ]
+        connection.return_value.cursor.return_value.__enter__.return_value = cursor
+
+        result = GuatemalaQuotationRepository().get_tariffs(("001", "002"))
+
+        self.assertIsNone(result["001"].courier)
+        self.assertIsNone(result["001"].restriction)
+        self.assertTrue(result["002"].courier)
+        self.assertEqual(result["002"].restriction, 0)
+        self.assertEqual(len(result), 2)
+
+    @patch("country.CR.repository.cr_quotation_repository.get_connection")
+    def test_cr_tariff_null_courier_and_restriction_are_preserved(
+        self,
+        connection,
+    ) -> None:
+        """NULL restriccion keeps the batch; NULL courier stays None."""
+        cursor = MagicMock()
+        cursor.fetchall.return_value = [
+            {
+                "partida": "001",
+                "dai": None,
+                "isc": None,
+                "courier": None,
+                "restriccion": None,
+            },
+            {
+                "partida": "002",
+                "dai": "0.05",
+                "isc": "0",
+                "courier": 1,
+                "restriccion": 0,
+            },
+        ]
+        connection.return_value.cursor.return_value.__enter__.return_value = cursor
+
+        result = CostaRicaQuotationRepository().get_tariffs(("001", "002"))
+
+        self.assertIsNone(result["001"].courier)
+        self.assertIsNone(result["001"].restriction)
+        self.assertTrue(result["002"].courier)
+        self.assertEqual(result["002"].restriction, 0)
+        self.assertEqual(len(result), 2)
 
 
 if __name__ == "__main__":

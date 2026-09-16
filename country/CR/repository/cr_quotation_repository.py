@@ -159,6 +159,6 @@ class CostaRicaQuotationRepository(BaseQuotationRepository):
             partida=str(row["partida"]),
             dai=decimal_from_row(row["dai"], "dai") if row["dai"] is not None else None,
             isc=decimal_from_row(row["isc"], "isc") if row["isc"] is not None else None,
-            courier=bool(row["courier"]),
-            restriction=int(row["restriccion"]),
+            courier=bool(row["courier"]) if row["courier"] is not None else None,
+            restriction=int(row["restriccion"]) if row["restriccion"] is not None else None,
         )

@@ -137,6 +137,6 @@ class GuatemalaQuotationRepository(BaseQuotationRepository):
                 if row["arancel_porcentaje"] is not None
                 else None
             ),
-            courier=bool(row["courier"]),
-            restriction=int(row["restriccion"]),
+            courier=bool(row["courier"]) if row["courier"] is not None else None,
+            restriction=int(row["restriccion"]) if row["restriccion"] is not None else None,
         )
