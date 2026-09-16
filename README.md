@@ -30,7 +30,7 @@ quotation_main.py
 - `country/*/service/`: únicamente calculadora y promesa de cada país.
 - `country/*/repository/`: consultas específicas del esquema del país.
 - `repository/`: consultas compartidas por esquemas GT/CR.
-- `database/`: conexión MySQL y `oc_setting` globales, cargados fuera del handler y reutilizados en warm starts.
+- `database/`: conexión MySQL y `oc_setting` globales. El warm-up corre dentro del handler Lambda en la primera invocación y se reutiliza en warm starts.
 - `config/`: configuración del despliegue, no reglas de negocio.
 
 `QuotationService` contiene el flujo completo común, basado en el cotizador GT.
