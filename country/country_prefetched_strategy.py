@@ -56,9 +56,13 @@ class CountryPrefetchedStrategy(CountryQuotationStrategy):
         unspsc: str,
         settings: CountrySettingsDTO,
     ) -> UnspscDataDTO | None:
-        """Return the prefetched UNSPSC row or ask the country Strategy."""
-        if self._lookup is not None and unspsc in self._lookup.unspsc:
-            return self._lookup.unspsc[unspsc]
+        """Return the prefetched UNSPSC row. Missing codes stay in memory.
+
+        After ``bind_lookup`` this method never queries MySQL, even when the
+        code is absent from the prefetch map.
+        """
+        if self._lookup is not None:
+            return self._lookup.unspsc.get(unspsc)
         return self._inner.get_unspsc_data(unspsc, settings)
 
     def save_unknown_unspsc(self, unspsc: str) -> None:
@@ -91,8 +95,16 @@ class CountryPrefetchedStrategy(CountryQuotationStrategy):
             return self._lookup.category_courier.get(product_id, False)
         return self._inner.get_category_tree_courier(product_id)
 
+    def _refuse_query_after_bind(self) -> None:
+        """Reject MySQL batch reads once workers own an in-memory lookup."""
+        if self._lookup is not None:
+            raise RuntimeError(
+                "MySQL reads are forbidden after the prefetch map is bound."
+            )
+
     def load_products(self, product_ids: Sequence[int]) -> dict[int, ProductDataDTO]:
         """Delegate the batched product read to the country Strategy."""
+        self._refuse_query_after_bind()
         return self._inner.load_products(product_ids)
 
     def load_unspsc_map(
@@ -101,14 +113,17 @@ class CountryPrefetchedStrategy(CountryQuotationStrategy):
         settings: CountrySettingsDTO,
     ) -> dict[str, UnspscDataDTO | None]:
         """Delegate the batched UNSPSC read to the country Strategy."""
+        self._refuse_query_after_bind()
         return self._inner.load_unspsc_map(codes, settings)
 
     def save_unknown_unspsc_many(self, codes: Sequence[str]) -> None:
         """Delegate the batched unknown-UNSPSC insert to the country Strategy."""
+        self._refuse_query_after_bind()
         return self._inner.save_unknown_unspsc_many(codes)
 
     def load_tariffs(self, partidas: Sequence[str]) -> dict[str, TariffDataDTO]:
         """Delegate the batched tariff read to the country Strategy."""
+        self._refuse_query_after_bind()
         return self._inner.load_tariffs(partidas)
 
     def load_sales_iva_map(self, codes: Sequence[str]) -> dict[str, Decimal]:
@@ -141,6 +156,7 @@ class CountryPrefetchedStrategy(CountryQuotationStrategy):
         product_ids: Sequence[int],
     ) -> dict[int, bool]:
         """Delegate the batched category-tree read to the country Strategy."""
+        self._refuse_query_after_bind()
         return self._inner.load_category_tree_courier_map(product_ids)
 
     def resolve_exchange_rate(self, settings: CountrySettingsDTO) -> Decimal:

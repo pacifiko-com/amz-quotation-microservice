@@ -15,7 +15,6 @@ except ImportError:
 
 from config.secrets_loader import apply_secrets_from_manager
 from const import COUNTRIES
-from Utils.exceptions import ConfigurationError
 
 
 @dataclass(frozen=True)
@@ -48,11 +47,16 @@ class Settings:
         log_level: Logging verbosity (DEBUG, INFO, WARNING, ERROR).
         oc_setting_cache_ttl_seconds: Seconds to reuse ``oc_setting`` in
             process memory before reloading from MySQL.
+        quotation_worker_threads: Maximum product-quote threads after prefetch.
+        quotation_min_products_per_worker: Minimum products assigned to each
+            worker; extra threads are dropped when the batch is smaller.
     """
 
     databases: dict[str, DatabaseSettings]
     log_level: str
     oc_setting_cache_ttl_seconds: int
+    quotation_worker_threads: int
+    quotation_min_products_per_worker: int
 
 
 @lru_cache(maxsize=1)
@@ -70,7 +74,54 @@ def get_settings() -> Settings:
         },
         log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
         oc_setting_cache_ttl_seconds=_load_oc_setting_cache_ttl_seconds(),
+        quotation_worker_threads=_load_positive_int(
+            "QUOTATION_WORKER_THREADS", 10
+        ),
+        quotation_min_products_per_worker=_load_positive_int(
+            "QUOTATION_MIN_PRODUCTS_PER_WORKER", 10
+        ),
     )
+
+
+def _load_positive_int(name: str, default: int) -> int:
+    """Parse a positive integer from the environment.
+
+    Args:
+        name: Environment variable name.
+        default: Value used when the variable is missing or invalid.
+
+    Returns:
+        int: Configured positive integer.
+    """
+    raw_value = os.getenv(name, str(default))
+    try:
+        value = int(raw_value)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+def quote_worker_count(
+    product_count: int,
+    max_workers: int,
+    min_products_per_worker: int,
+) -> int:
+    """Choose how many quote threads to start for one request.
+
+    Args:
+        product_count: Products in the current request.
+        max_workers: Configured thread cap.
+        min_products_per_worker: Minimum products each worker should own.
+
+    Returns:
+        int: At least one worker, never more than the product count or cap.
+    """
+    if product_count <= 1:
+        return 1
+    workers = max(1, max_workers)
+    minimum = max(1, min_products_per_worker)
+    by_load = max(1, product_count // minimum)
+    return min(workers, by_load, product_count)
 
 
 def _load_oc_setting_cache_ttl_seconds() -> int:
@@ -100,6 +151,8 @@ def get_database_settings(country: str) -> DatabaseSettings:
         ValueError: If the country is unsupported.
         ConfigurationError: If required database fields are missing.
     """
+    from Utils.exceptions import ConfigurationError
+
     normalized = country.strip().upper()
     database = get_settings().databases.get(normalized)
     if database is None:

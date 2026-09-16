@@ -41,18 +41,25 @@ UNSPSC/defaults, `oc_product`, partida, courier de categorías, tasa de cambio,
 
 ## Flujo
 
+El prefetch MySQL es secuencial (una vez por request). Luego cada producto
+se cotiza en memoria sobre la Strategy ya bindeada. `quote_product` no abre
+conexiones. El número de hilos sale de `QUOTATION_WORKER_THREADS` (default
+10); si no hay al menos `QUOTATION_MIN_PRODUCTS_PER_WORKER` (default 10)
+productos por hilo, se reducen workers. El resultado conserva el orden del
+request.
+
 Para cada producto, en el orden recibido:
 
 1. Cargar únicamente las constantes requeridas de `oc_setting`.
-2. Leer peso, courier y partida de `oc_product`.
+2. Prefetch en batch: peso/courier/partida de `oc_product`, UNSPSC,
+   partidas y, si aplica, IVA de venta. Los UNSPSC desconocidos se
+   registran aquí con `INSERT IGNORE` en `oc_category_amz_new`.
 3. Aplicar overrides del request.
-4. Resolver UNSPSC en `oc_arancel_amz`.
-5. Si no existe, registrar el código con `INSERT IGNORE` en
-   `oc_category_amz_new` y usar defaults de `oc_setting`.
-6. Resolver la partida en `oc_partida_arancelaria`.
+4. Resolver UNSPSC desde el mapa en memoria (sin query). Si no existe,
+   usar defaults de `oc_setting`.
+5. Resolver la partida desde el mapa en memoria.
 7. Aplicar la precedencia común de courier/arancel/restricción. El árbol
-   `oc_category` solo se consulta si no hay fila de partida y el courier
-   sigue apagado.
+   `oc_category` ya viene en el prefetch si hizo falta.
 8. Seleccionar una oferta desde `amz_offers`: primera elegible con
    `deliveryRange.max`; si el request activa `prefer_amazon_fulfillment`,
    primera elegible AF; si no, primera elegible. El shipping de las pasadas
@@ -358,6 +365,10 @@ Variables de entorno:
 - `LOG_LEVEL`.
 - `OC_SETTING_CACHE_TTL_SECONDS` (segundos de reutilización de
   `oc_setting` en memoria; default `300`. `0` recarga en cada llamada).
+- `QUOTATION_WORKER_THREADS` (máximo de hilos para cotizar productos
+  después del prefetch; default `10`).
+- `QUOTATION_MIN_PRODUCTS_PER_WORKER` (mínimo de productos por hilo;
+  default `10`. Si el batch es más chico, se reducen workers).
 - `SECRETS_MANAGER_SECRET_ARN` (solo en Lambda; el JSON del secreto debe
   incluir las keys `DB_GT_*` y `DB_CR_*`).
 
@@ -392,8 +403,9 @@ con ejecución básica, acceso a la VPC y `secretsmanager:GetSecretValue`
 únicamente sobre el secreto de ese ambiente.
 
 `SecretArn` identifica el secreto de Secrets Manager. El valor debe ser un
-JSON con las keys `DB_GT_*` y `DB_CR_*` (y opcionalmente `LOG_LEVEL` y
-`OC_SETTING_CACHE_TTL_SECONDS`). Al
+JSON con las keys `DB_GT_*` y `DB_CR_*` (y opcionalmente `LOG_LEVEL`,
+`OC_SETTING_CACHE_TTL_SECONDS`, `QUOTATION_WORKER_THREADS` y
+`QUOTATION_MIN_PRODUCTS_PER_WORKER`). Al
 iniciar, `config/secrets_loader.py` copia esas keys al entorno y
 `config/settings.py` las lee. El runtime de Lambda ya incluye boto3. Las
 Lambdas están en subnets privadas: Secrets Manager requiere NAT o un VPC
@@ -421,7 +433,9 @@ Ejemplo de secreto JSON:
   "DB_CR_USER": "quotation",
   "DB_CR_PASSWORD": "...",
   "DB_CR_CONNECT_TIMEOUT": "10",
-  "OC_SETTING_CACHE_TTL_SECONDS": "300"
+  "OC_SETTING_CACHE_TTL_SECONDS": "300",
+  "QUOTATION_WORKER_THREADS": "10",
+  "QUOTATION_MIN_PRODUCTS_PER_WORKER": "10"
 }
 ```
 

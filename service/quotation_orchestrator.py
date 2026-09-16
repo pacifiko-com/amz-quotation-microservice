@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Callable, Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from decimal import Decimal, ROUND_CEILING
 
 from country.country_strategy_abstract import CountryQuotationStrategy
@@ -19,6 +20,7 @@ from DTO.quotation_context_dto import (
     TariffDataDTO,
     UnspscDataDTO,
 )
+from config.settings import get_settings, quote_worker_count
 from const import KG_TO_LB
 from DTO.quotation_request_dto import ProductFactsDTO
 from DTO.quotation_response_dto import QuotationResponseDTO, ResultObjectDTO
@@ -74,11 +76,60 @@ class QuotationOrchestrator:
         if callable(bind_lookup):
             bind_lookup(self.prefetch(strategy, products, settings))
 
-        results = tuple(
-            self.quote_safely(strategy, product, settings, quote_product)
-            for product in products
+        resolve_exchange_rate = getattr(strategy, "resolve_exchange_rate", None)
+        if callable(resolve_exchange_rate):
+            resolve_exchange_rate(settings)
+
+        results = self._quote_products(
+            strategy, products, settings, quote_product
         )
         return _response_from_results(results)
+
+    def _quote_products(
+        self,
+        strategy: CountryQuotationStrategy,
+        products: Sequence[ProductFactsDTO],
+        settings: CountrySettingsDTO,
+        quote_product: QuoteProductFn,
+    ) -> tuple[ResultObjectDTO, ...]:
+        """Quote products sequentially or in a bounded thread pool.
+
+        Args:
+            strategy: Country Strategy already bound to the prefetch map.
+            products: Products in request order.
+            settings: Country constants loaded once for the request.
+            quote_product: Flow-specific quotation step.
+
+        Returns:
+            tuple[ResultObjectDTO, ...]: One result per input product.
+        """
+        app_settings = get_settings()
+        workers = quote_worker_count(
+            len(products),
+            app_settings.quotation_worker_threads,
+            app_settings.quotation_min_products_per_worker,
+        )
+        if workers <= 1:
+            return tuple(
+                self.quote_safely(strategy, product, settings, quote_product)
+                for product in products
+            )
+
+        results: list[ResultObjectDTO | None] = [None] * len(products)
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            future_indexes = {
+                pool.submit(
+                    self.quote_safely,
+                    strategy,
+                    product,
+                    settings,
+                    quote_product,
+                ): index
+                for index, product in enumerate(products)
+            }
+            for future in as_completed(future_indexes):
+                results[future_indexes[future]] = future.result()
+        return tuple(results)
 
     def prefetch(
         self,
