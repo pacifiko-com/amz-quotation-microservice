@@ -137,7 +137,8 @@ Reglas de forma:
       "Message": "Product quoted successfully.",
       "product_id": 123,
       "offer_id": "offer-1",
-      "amazon_price": 49.99,
+      "amazon_price": 59.99,
+      "special_amazon_price": 49.99,
       "price_dolar": 59.99,
       "price_local": 529.0,
       "price_without_tax_dolar": 53.56,
@@ -164,9 +165,10 @@ Reglas de forma:
 }
 ```
 
-- `amazon_price`: oferta Amazon seleccionada en USD, con el shipping resuelto.
-- `price_dolar`: list price + shipping; si no hay lista, offer + shipping.
-- `special_price_dolar`: offer + shipping si supera el umbral; si no, `0`.
+- `amazon_price`: precio de lista Amazon en USD cuando el special califica; si no, la oferta seleccionada (con shipping resuelto).
+- `special_amazon_price`: oferta Amazon seleccionada en USD cuando el special califica; si no, `null`.
+- `price_dolar`: precio de venta USD calculado (lista si hay special calificado; si no, oferta).
+- `special_price_dolar`: precio de venta USD calculado de la oferta cuando el special califica; si no, `null`.
 - `cost_dolar`: landed cost calculado en USD.
 - `cost_local`: landed cost convertido con `exchange_rate`.
 - `price_local`: precio público local (lista si hay special; si no, oferta).
