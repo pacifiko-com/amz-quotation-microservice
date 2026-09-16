@@ -13,6 +13,7 @@ from DTO.quotation_context_dto import (
     CountrySettingsDTO,
     ProductDataDTO,
     QuotationLookupDTO,
+    ResolvedPolicyDTO,
     TariffDataDTO,
     UnspscDataDTO,
 )
@@ -165,6 +166,41 @@ class CountryPolicyTests(unittest.TestCase):
         strategy.get_unspsc_data.assert_not_called()
         strategy.save_unknown_unspsc.assert_not_called()
         strategy.get_default_unspsc.assert_called_once()
+
+    def test_weight_limit_is_compared_in_kilograms(self) -> None:
+        """The max weight setting is kilograms, not the stored pound value."""
+        settings = CountrySettingsDTO({"max_product_weight_kg": "10"})
+        under_limit = ResolvedPolicyDTO(
+            weight_lb=Decimal("15"),
+            arancel_percentage=Decimal("0.15"),
+            margin_percentage=Decimal("1.1"),
+            courier=False,
+            restriction=0,
+            danger_good_active=False,
+            partida=None,
+            sales_iva_rate=Decimal("0.12"),
+        )
+        over_limit = ResolvedPolicyDTO(
+            weight_lb=Decimal("25"),
+            arancel_percentage=Decimal("0.15"),
+            margin_percentage=Decimal("1.1"),
+            courier=False,
+            restriction=0,
+            danger_good_active=False,
+            partida=None,
+            sales_iva_rate=Decimal("0.12"),
+        )
+
+        allowed = QuotationOrchestrator.validate_policy(10, under_limit, settings)
+        rejected = QuotationOrchestrator.validate_policy(10, over_limit, settings)
+
+        self.assertIsNone(allowed)
+        self.assertIsNotNone(rejected)
+        self.assertFalse(rejected.success)
+        self.assertEqual(
+            rejected.message,
+            "Product exceeds the configured weight limit (compared in KG).",
+        )
 
 
 class PrefetchedSalesIvaTests(unittest.TestCase):

@@ -440,12 +440,14 @@ class QuotationOrchestrator:
         # Las condiciones se evalúan en cascada y se devuelve solo el primer
         # motivo. El resultado incluye la política ya resuelta para que el
         # caller vea con qué datos se tomó la decisión.
+        weight_kg = policy.weight_lb / KG_TO_LB
+
         if policy.restriction:
             message = "Product is restricted."
         elif policy.weight_lb <= 0:
             message = "Product weight is required."
-        elif policy.weight_lb >= settings.decimal("max_product_weight_kg"):
-            message = "Product exceeds the configured weight limit."
+        elif weight_kg >= settings.decimal("max_product_weight_kg"):
+            message = "Product exceeds the configured weight limit (compared in KG)."
         else:
             return None
         return QuotationOrchestrator.failed_result(
