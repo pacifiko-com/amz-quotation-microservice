@@ -317,10 +317,6 @@ Verificadas contra `lectura-qa-cr`.
 | `promise_tier_3_value` | CR | Valor de tier largo | Nueva |
 | `promise_fallback_tier` | CR | Tier fuera de rangos | Nueva |
 
-Los scripts [GT_new_quotation_settings.sql](database/seeds/GT_new_quotation_settings.sql)
-y [CR_new_quotation_settings.sql](database/seeds/CR_new_quotation_settings.sql)
-contienen únicamente keys nuevas. Deben revisarse y ejecutarse una sola vez;
-el servicio falla de forma controlada si falta una key requerida.
 
 ## Configuración y ejecución
 
