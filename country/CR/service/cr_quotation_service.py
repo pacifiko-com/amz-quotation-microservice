@@ -487,6 +487,8 @@ class CostaRicaQuotationService:
             parsed = datetime.fromisoformat(text)
         except ValueError:
             return None
+        if parsed.tzinfo is None and "T" not in text and " " not in text:
+            return parsed.date()
         if parsed.tzinfo is None:
             parsed = parsed.replace(tzinfo=ZoneInfo("UTC"))
         return parsed.astimezone(ZoneInfo(_CR_PROMISE_TIMEZONE)).date()

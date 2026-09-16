@@ -334,6 +334,20 @@ class CountryCalculatorTests(unittest.TestCase):
             any("deliveryRange.max" in note for note in result.quotation_notes)
         )
 
+    def test_cr_date_only_delivery_range_keeps_calendar_date(self) -> None:
+        """Date-only max values stay on the original calendar day."""
+        local_date = CostaRicaQuotationService._parse_delivery_date("2026-09-20")
+
+        self.assertEqual(str(local_date), "2026-09-20")
+
+    def test_cr_aware_delivery_range_converts_timezone(self) -> None:
+        """Values with time or timezone still convert into Costa Rica."""
+        local_date = CostaRicaQuotationService._parse_delivery_date(
+            "2026-09-08T03:00:00Z",
+        )
+
+        self.assertEqual(str(local_date), "2026-09-07")
+
     def test_cr_promise_parses_days_from_delivery_text(self) -> None:
         """Without a max date, only delivery-specific day phrases are used."""
         settings = self._cr_promise_settings()
