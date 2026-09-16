@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from const import KG_TO_LB, OZ_PER_KG
+from const import COUNTRIES, KG_TO_LB, OZ_PER_KG
 
 
 class RequestValidationError(ValueError):
@@ -199,8 +199,10 @@ def _country_and_products(payload: dict[str, Any]) -> tuple[str, list[Any]]:
         tuple[str, list[Any]]: Uppercase country code and products array.
     """
     country = str(payload.get("country") or "").strip().upper()
-    if country not in {"GT", "CR"}:
-        raise RequestValidationError("country must be GT or CR.")
+    if country not in COUNTRIES:
+        raise RequestValidationError(
+            f"country must be {' or '.join(COUNTRIES)}."
+        )
 
     products = payload.get("products")
     if not isinstance(products, list) or not products:

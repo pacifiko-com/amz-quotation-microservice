@@ -14,6 +14,7 @@ except ImportError:
     pass
 
 from config.secrets_loader import apply_secrets_from_manager
+from const import COUNTRIES
 
 
 @dataclass(frozen=True)
@@ -64,7 +65,7 @@ def get_settings() -> Settings:
     return Settings(
         databases={
             country: _load_database_settings(country)
-            for country in ("GT", "CR")
+            for country in COUNTRIES
         },
         log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
         oc_setting_cache_ttl_seconds=_load_oc_setting_cache_ttl_seconds(),

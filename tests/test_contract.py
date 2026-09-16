@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from country.country_strategy_factory import CountryStrategyFactory
 from DTO.quotation_context_dto import CountrySettingsDTO
-from const import KG_TO_LB, OZ_PER_KG
+from const import COUNTRIES, KG_TO_LB, OZ_PER_KG
 from DTO.quotation_request_dto import (
     PriceQuotationRequestDTO,
     QuotationRequestDTO,
@@ -80,7 +80,7 @@ class ContractTests(unittest.TestCase):
             "load_sales_iva_map",
             "resolve_sales_iva_rate",
         )
-        for country in ("GT", "CR"):
+        for country in COUNTRIES:
             strategy = CountryStrategyFactory.create(country)
             self.assertFalse(hasattr(strategy, "quote_product"))
             self.assertTrue(
