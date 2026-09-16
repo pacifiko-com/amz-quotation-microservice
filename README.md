@@ -50,8 +50,9 @@ Para cada producto, en el orden recibido:
 5. Si no existe, registrar el código con `INSERT IGNORE` en
    `oc_category_amz_new` y usar defaults de `oc_setting`.
 6. Resolver la partida en `oc_partida_arancelaria`.
-7. Aplicar la precedencia común de courier/arancel/restricción y, cuando
-   corresponda, consultar courier en el árbol `oc_category`.
+7. Aplicar la precedencia común de courier/arancel/restricción. El árbol
+   `oc_category` solo se consulta si no hay fila de partida y el courier
+   sigue apagado.
 8. Seleccionar una oferta desde `amz_offers`: primera elegible con
    `deliveryRange.max`; si el request activa `prefer_amazon_fulfillment`,
    primera elegible AF; si no, primera elegible. El shipping de las pasadas
@@ -203,14 +204,25 @@ Reglas de forma:
 
 ### Costa Rica
 
-- Peso: igual que GT; la política expone `weight_lb` y la calculadora lo usa
-  sin reconvertir a kg.
-- Courier: override/producto, UNSPSC y árbol de categorías.
-- Partida: reemplaza porcentaje por `dai + isc`; no reemplaza courier ni
-  restricción.
+CR usa el mismo `resolve_policy()` que GT. Cambia el origen de los datos
+(partida `dai`/`isc`, `partida_codigo`) y la calculadora/promesa.
+
+- Peso: igual que GT en la política (`weight_lb`). La calculadora convierte
+  a kg (`weight_lb / 2.20462`, ceil) para fletes por kilo.
+- Courier base: override `pac_product_courier` o `oc_product.courier`; si
+  está apagado, UNSPSC o `default_courier`.
+- Con partida encontrada en `oc_partida_arancelaria`: el courier de la
+  partida reemplaza al ya resuelto (en CR el campo se mapea siempre a bool).
+  Si queda courier, arancel y restricción siguen del UNSPSC. Si no es
+  courier, el arancel pasa a `dai + isc` (o se conserva el UNSPSC si ambos
+  son nulos) y la restricción pasa a la de la partida. El árbol de
+  categorías no se consulta cuando hay fila de partida.
+- Sin partida y courier cero: árbol de categorías.
 - Calculadora: CIF, DAI/ISC, IVA aduanas, flete real, combustible, Ley 6946,
-  desaduanaje, seguro, trámite courier, margen e IVA venta.
-- Promesa: texto Amazon, umbrales AF/MF y ajuste courier.
+  desaduanaje, seguro, trámite courier, margen e IVA venta (`courier_*` o
+  `poliza_*` según el flag).
+- Promesa: texto Amazon, umbrales AF/MF y, si es courier, desplazamiento
+  con `courier_promise_shift`.
 
 ## Constantes Guatemala
 
