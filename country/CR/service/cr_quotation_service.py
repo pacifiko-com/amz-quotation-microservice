@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from decimal import ROUND_CEILING, Decimal
+from zoneinfo import ZoneInfo
 
 from DTO.quotation_context_dto import (
     CalculationInputDTO,
@@ -14,6 +16,12 @@ from DTO.quotation_context_dto import (
 )
 from Utils.price_rounding import round_price
 from const import KG_TO_LB
+
+_CR_PROMISE_TIMEZONE = "America/Costa_Rica"
+_DELIVERY_DAYS_IN_TEXT = re.compile(
+    r"(\d+)\s*-?\s*(?:d[ií]as?|days?)\b",
+    re.IGNORECASE,
+)
 
 
 def _operation_notes(name: str, formula: str, values: str) -> tuple[str, str]:
@@ -353,7 +361,7 @@ class CostaRicaQuotationService:
         courier: bool,
         settings: CountrySettingsDTO,
     ) -> DeliveryPromiseDTO:
-        """Map Amazon delivery text and courier mode to a CR promise tier.
+        """Map Amazon delivery date or text and courier mode to a CR promise tier.
 
         Args:
             offer: Selected Amazon offer and delivery information.
@@ -378,27 +386,35 @@ class CostaRicaQuotationService:
             )
             return DeliveryPromiseDTO(tier=tier, quotation_notes=tuple(notes))
 
-        # CR no recibe fecha estructurada sino el texto de entrega de Amazon,
-        # así que los días se extraen del texto. "mañana" no trae número y se
-        # traduce al equivalente configurado.
-        text = offer.delivery_information.casefold()
-        tomorrow = any(
-            term.casefold() in text
-            for term in settings.string_list("promise_tomorrow_terms")
-        )
-        days_match = re.search(r"\d+", text)
-        if tomorrow:
-            days = settings.integer("promise_tomorrow_days")
+        days = self._days_from_delivery_range_max(offer.delivery_range_max)
+        if days is not None:
             notes.append(
-                f"Promesa CR: texto de mañana; días={days} "
-                "(promise_tomorrow_days)."
+                f"Promesa CR: días desde deliveryRange.max: {days}."
             )
-        elif days_match:
-            days = int(days_match.group())
-            notes.append(f"Promesa CR: días extraídos del texto de entrega: {days}.")
         else:
-            days = None
-            notes.append("Promesa CR: el texto de entrega no trae días.")
+            text = offer.delivery_information.casefold()
+            tomorrow = any(
+                term.casefold() in text
+                for term in settings.string_list("promise_tomorrow_terms")
+            )
+            days_match = _DELIVERY_DAYS_IN_TEXT.search(text)
+            if tomorrow:
+                days = settings.integer("promise_tomorrow_days")
+                notes.append(
+                    f"Promesa CR: texto de mañana; días={days} "
+                    "(promise_tomorrow_days)."
+                )
+            elif days_match:
+                days = int(days_match.group(1))
+                notes.append(
+                    "Promesa CR: días extraídos del texto de entrega: "
+                    f"{days}."
+                )
+            else:
+                days = None
+                notes.append(
+                    "Promesa CR: el texto de entrega no trae días."
+                )
 
         # El tipo de fulfillment solo selecciona el juego de umbrales a usar;
         # la comparación en cascada que sigue es la misma para ambos.
@@ -449,3 +465,28 @@ class CostaRicaQuotationService:
             )
             tier = shifted
         return DeliveryPromiseDTO(tier=tier, quotation_notes=tuple(notes))
+
+    @staticmethod
+    def _days_from_delivery_range_max(raw_value: str | None) -> int | None:
+        """Return calendar days until ``deliveryRange.max``, if parseable."""
+        target = CostaRicaQuotationService._parse_delivery_date(raw_value)
+        if target is None:
+            return None
+        today = datetime.now(ZoneInfo(_CR_PROMISE_TIMEZONE)).date()
+        return max((target - today).days, 0)
+
+    @staticmethod
+    def _parse_delivery_date(raw_value: str | None):
+        """Parse Amazon max date into the Costa Rica calendar date."""
+        if not raw_value:
+            return None
+        text = raw_value.strip()
+        if text.endswith(("Z", "z")):
+            text = f"{text[:-1]}+00:00"
+        try:
+            parsed = datetime.fromisoformat(text)
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=ZoneInfo("UTC"))
+        return parsed.astimezone(ZoneInfo(_CR_PROMISE_TIMEZONE)).date()

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
@@ -297,6 +297,80 @@ class CountryCalculatorTests(unittest.TestCase):
         self.assertEqual(reduced.price_without_tax_usd, Decimal("136.152500"))
         self.assertEqual(reduced.price_without_tax_local, Decimal("68076.2500000"))
 
+    def test_cr_promise_prefers_delivery_range_max_over_text(self) -> None:
+        """A parseable max date supplies days even when the text has another number."""
+        today = datetime.now(ZoneInfo("America/Costa_Rica")).date()
+        offer = self._offer(
+            "In Stock.",
+            f"{(today + timedelta(days=5)).isoformat()}T12:00:00-06:00",
+            delivery_information="Arrives in 99 days",
+        )
+
+        result = CostaRicaQuotationService().resolve_delivery_promise(
+            offer,
+            False,
+            self._cr_promise_settings(),
+        )
+
+        self.assertEqual(result.tier, 1)
+        self.assertTrue(
+            any("deliveryRange.max" in note for note in result.quotation_notes)
+        )
+
+    def test_cr_promise_parses_days_from_delivery_text(self) -> None:
+        """Without a max date, only delivery-specific day phrases are used."""
+        settings = self._cr_promise_settings()
+        text_offer = self._offer(
+            "In Stock.",
+            None,
+            delivery_information="Llega en 20 días a 90210",
+        )
+        ignored_offer = self._offer(
+            "In Stock.",
+            None,
+            delivery_information="ZIP 90210, get it Friday",
+        )
+
+        text_result = CostaRicaQuotationService().resolve_delivery_promise(
+            text_offer,
+            False,
+            settings,
+        )
+        ignored_result = CostaRicaQuotationService().resolve_delivery_promise(
+            ignored_offer,
+            False,
+            settings,
+        )
+
+        self.assertEqual(text_result.tier, 2)
+        self.assertEqual(ignored_result.tier, 3)
+
+    @staticmethod
+    def _cr_promise_settings() -> CountrySettingsDTO:
+        """Build the CR promise settings used by delivery-day tests."""
+        return CountrySettingsDTO(
+            {
+                "preorder_offer_terms": '["preventa","pre-order"]',
+                "promise_tomorrow_terms": '["mañana","tomorrow"]',
+                "promise_tomorrow_days": "1",
+                "amazon_fulfillment_type": "AMAZON_FULFILLMENT",
+                "promise_af_tier_1_max_days": "13",
+                "promise_af_tier_2_max_days": "21",
+                "promise_af_tier_3_max_days": "31",
+                "promise_mf_tier_1_max_days": "13",
+                "promise_mf_tier_2_max_days": "23",
+                "promise_mf_tier_3_max_days": "31",
+                "promise_missing_delivery_af_tier": "3",
+                "promise_missing_delivery_mf_tier": "4",
+                "courier_promise_shift": "1",
+                "promise_preorder_tier": "4",
+                "promise_tier_1_value": "1",
+                "promise_tier_2_value": "2",
+                "promise_tier_3_value": "3",
+                "promise_fallback_tier": "5",
+            }
+        )
+
     @staticmethod
     def _gt_promise_settings() -> CountrySettingsDTO:
         """Build the GT promise settings used by availability tests."""
@@ -320,8 +394,9 @@ class CountryCalculatorTests(unittest.TestCase):
     def _offer(
         availability: str,
         delivery_range_max: str | None = "2026-09-10T00:00:00Z",
+        delivery_information: str = "",
     ) -> SelectedOfferDTO:
-        """Build a minimal offer for GT promise tests."""
+        """Build a minimal offer for country promise tests."""
         return SelectedOfferDTO(
             offer_id="offer-1",
             price_usd=Decimal("10"),
@@ -329,7 +404,7 @@ class CountryCalculatorTests(unittest.TestCase):
             shipping_usd=Decimal("0"),
             fulfillment_type="AMAZON_FULFILLMENT",
             availability=availability,
-            delivery_information="",
+            delivery_information=delivery_information,
             delivery_range_max=delivery_range_max,
         )
 

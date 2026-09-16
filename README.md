@@ -221,8 +221,9 @@ CR usa el mismo `resolve_policy()` que GT. Cambia el origen de los datos
 - Calculadora: CIF, DAI/ISC, IVA aduanas, flete real, combustible, Ley 6946,
   desaduanaje, seguro, trámite courier, margen e IVA venta (`courier_*` o
   `poliza_*` según el flag).
-- Promesa: texto Amazon, umbrales AF/MF y, si es courier, desplazamiento
-  con `courier_promise_shift`.
+- Promesa: primero días calendario hasta `deliveryRange.max`; si no hay
+  fecha, texto de mañana o un patrón de días (`días`/`days`); luego umbrales
+  AF/MF y, si es courier, `courier_promise_shift`.
 
 ## Constantes Guatemala
 
