@@ -227,6 +227,12 @@ por la implementación; no incluye credenciales ni tokens.
 | `desaduanaje` | GT | Cargo fijo no courier | Existente |
 | `courier_desaduanaje` | GT | Cargo fijo courier | Existente |
 | `seguro_valor_producto` | GT | Seguro en base arancelaria | Existente |
+| `poliza_flete_aduana_kg` | GT | Flete aduana USD/libra no courier | Nueva |
+| `courier_flete_aduana_kg` | GT | Flete aduana USD/libra courier | Nueva |
+| `poliza_seguro_aduanas` | GT | Tasa seguro aduanas no courier (sobre precio Amazon) | Nueva |
+| `courier_seguro_aduanas` | GT | Tasa seguro aduanas courier (sobre precio Amazon) | Nueva |
+| `poliza_seguro_flete` | GT | Tasa seguro flete no courier (sobre precio Amazon) | Nueva |
+| `courier_seguro_flete` | GT | Tasa seguro flete courier (sobre precio Amazon) | Nueva |
 | `danger_dolar` | GT | Cargo mercancía peligrosa | Existente |
 | `dias_importacion_amz` | GT | Buffer de promesa | Existente |
 | `global_store_promises` | GT | Rangos/textos de promesa | Existente |
