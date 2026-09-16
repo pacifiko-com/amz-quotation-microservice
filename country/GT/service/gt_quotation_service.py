@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import ROUND_CEILING, Decimal
 from zoneinfo import ZoneInfo
 
@@ -16,6 +16,7 @@ from DTO.quotation_context_dto import (
 )
 from Utils.exceptions import ProductQuotationError
 from Utils.price_rounding import round_price
+from Utils.weekdays import weekdays_between
 
 
 def _operation_notes(name: str, formula: str, values: str) -> tuple[str, str]:
@@ -420,16 +421,9 @@ class GuatemalaQuotationService:
                 ),
             )
 
-        # El conteo va día por día desde hoy hasta la fecha ya convertida a
-        # la zona del país, saltando sábados y domingos, y al total se le
-        # suma el buffer de importación.
+        # Weekdays (Mon-Fri) in (today, target], then add the import buffer.
         today = datetime.now(ZoneInfo(timezone_name)).date()
-        business_days = 0
-        current = today
-        while current < target:
-            current += timedelta(days=1)
-            if current.weekday() < 5:
-                business_days += 1
+        business_days = weekdays_between(today, target)
         import_days = settings.integer("dias_importacion_amz")
         total_days = business_days + import_days
 

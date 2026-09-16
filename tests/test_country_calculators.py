@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import unittest
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
@@ -16,6 +16,7 @@ from DTO.quotation_context_dto import (
     SelectedOfferDTO,
 )
 from Utils.price_rounding import round_price
+from Utils.weekdays import weekdays_between
 
 
 class CountryCalculatorTests(unittest.TestCase):
@@ -96,6 +97,22 @@ class CountryCalculatorTests(unittest.TestCase):
         )
 
         self.assertEqual(str(local_date), "2026-09-07")
+
+    def test_gt_weekdays_match_open_interval_to_target(self) -> None:
+        """Business days are Monday-Friday dates after today through target."""
+        friday = date(2026, 9, 11)
+        monday = date(2026, 9, 14)
+        same = date(2026, 9, 11)
+
+        self.assertEqual(
+            weekdays_between(friday, monday), 1
+        )
+        self.assertEqual(
+            weekdays_between(same, same), 0
+        )
+        self.assertEqual(
+            weekdays_between(monday, friday), 0
+        )
 
     def test_gt_days_below_lowest_range_use_short_tier(self) -> None:
         """Totals under the first configured range use the short tier."""
