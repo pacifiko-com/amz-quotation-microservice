@@ -13,6 +13,7 @@ from DTO.quotation_context_dto import (
     EMPTY_PRODUCT_DATA,
     ProductDataDTO,
     QuotationLookupDTO,
+    DeliveryPromiseDTO,
     SalesIvaDTO,
     SelectedOfferDTO,
     TariffDataDTO,
@@ -178,6 +179,6 @@ class CountryPrefetchedStrategy(CountryQuotationStrategy):
         offer: SelectedOfferDTO,
         courier: bool,
         settings: CountrySettingsDTO,
-    ) -> int:
+    ) -> DeliveryPromiseDTO:
         """Delegate the country delivery promise."""
         return self._inner.resolve_delivery_promise(offer, courier, settings)

@@ -17,6 +17,7 @@ from DTO.quotation_context_dto import (
     CalculationResultDTO,
     CountrySettingsDTO,
     ProductDataDTO,
+    DeliveryPromiseDTO,
     SalesIvaDTO,
     SelectedOfferDTO,
     TariffDataDTO,
@@ -320,7 +321,7 @@ class CostaRicaQuotationStrategy(CountryQuotationStrategy):
         offer: SelectedOfferDTO,
         courier: bool,
         settings: CountrySettingsDTO,
-    ) -> int:
+    ) -> DeliveryPromiseDTO:
         """Resolve Costa Rica Amazon promise.
 
         Args:
@@ -329,6 +330,6 @@ class CostaRicaQuotationStrategy(CountryQuotationStrategy):
             settings: CR promise constants.
 
         Returns:
-            int: Delivery promise tier.
+            DeliveryPromiseDTO: Delivery promise tier.
         """
         return self._service.resolve_delivery_promise(offer, courier, settings)

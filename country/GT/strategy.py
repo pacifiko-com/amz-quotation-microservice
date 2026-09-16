@@ -20,6 +20,7 @@ from DTO.quotation_context_dto import (
     CalculationResultDTO,
     CountrySettingsDTO,
     ProductDataDTO,
+    DeliveryPromiseDTO,
     SalesIvaDTO,
     SelectedOfferDTO,
     TariffDataDTO,
@@ -266,7 +267,7 @@ class GuatemalaQuotationStrategy(CountryQuotationStrategy):
         offer: SelectedOfferDTO,
         courier: bool,
         settings: CountrySettingsDTO,
-    ) -> int:
+    ) -> DeliveryPromiseDTO:
         """Resolve Guatemala Amazon promise.
 
         Args:
@@ -275,7 +276,7 @@ class GuatemalaQuotationStrategy(CountryQuotationStrategy):
             settings: GT promise constants.
 
         Returns:
-            int: Delivery promise tier.
+            DeliveryPromiseDTO: Delivery promise tier.
         """
         return self._service.resolve_delivery_promise(offer, courier, settings)
 

@@ -13,6 +13,7 @@ from DTO.quotation_context_dto import (
     TariffDataDTO,
     UnspscDataDTO,
     SalesIvaDTO,
+    DeliveryPromiseDTO,
 )
 
 
@@ -244,7 +245,7 @@ class CountryQuotationStrategy(ABC):
         offer: SelectedOfferDTO,
         courier: bool,
         settings: CountrySettingsDTO,
-    ) -> int:
+    ) -> DeliveryPromiseDTO:
         """Return the country-specific Amazon delivery promise tier.
 
         Args:
@@ -253,6 +254,6 @@ class CountryQuotationStrategy(ABC):
             settings: Country promise constants.
 
         Returns:
-            int: OpenCart delivery promise tier.
+            DeliveryPromiseDTO: OpenCart delivery promise tier.
         """
         raise NotImplementedError
