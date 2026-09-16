@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Callable, Sequence
 from decimal import Decimal, ROUND_CEILING
 
@@ -211,10 +212,16 @@ class QuotationOrchestrator:
                 quotation_notes=getattr(exc, "quotation_notes", ()),
             )
         except Exception as exc:
-            logger.exception("Product quotation failed product_id=%s", product.product_id)
+            correlation_id = uuid.uuid4().hex
+            logger.exception(
+                "Product quotation failed product_id=%s correlation_id=%s",
+                product.product_id,
+                correlation_id,
+                exc_info=exc,
+            )
             return QuotationOrchestrator.failed_result(
                 product.product_id,
-                _unexpected_product_error_message(exc),
+                _unexpected_product_error_message(),
                 quotation_notes=getattr(exc, "quotation_notes", ()),
             )
 
@@ -651,17 +658,10 @@ def _unpack_sales_iva(value: object) -> tuple[Decimal, tuple[str, ...]]:
     return rate, tuple(notes or ())
 
 
-def _unexpected_product_error_message(exc: BaseException) -> str:
-    """Build a product message that includes the unexpected error.
-
-    Args:
-        exc: Exception that escaped the product quotation flow.
+def _unexpected_product_error_message() -> str:
+    """Return the public message for an unexpected product failure.
 
     Returns:
-        str: Generic prefix plus exception type and detail.
+        str: Fixed generic message with no exception type or detail.
     """
-    detail = str(exc).strip()
-    name = type(exc).__name__
-    if detail:
-        return f"Unexpected product quotation failure: {name}: {detail}"
-    return f"Unexpected product quotation failure: {name}"
+    return "Unexpected product quotation failure."

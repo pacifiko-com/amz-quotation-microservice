@@ -89,6 +89,30 @@ class LambdaEntryTests(unittest.TestCase):
         self.assertEqual(result["result"], [])
         self.assertNotIn("statusCode", result)
 
+    def test_unexpected_error_returns_generic_message(self) -> None:
+        """Unexpected failures do not leak exception type or detail."""
+        with patch(
+            "Utils.lambda_entry._warm_once",
+            side_effect=RuntimeError("secret internals"),
+        ), self.assertLogs("Utils.lambda_entry", level="ERROR") as logs:
+            result = handle_quotation_event(
+                {"body": {"country": "GT"}, "requestContext": {"stage": "qa"}},
+                lambda event: MagicMock(country="GT"),
+                lambda request: QuotationResponseDTO(
+                    success=True, message="ok", result=()
+                ),
+            )
+
+        self.assertEqual(result["statusCode"], 500)
+        body = json.loads(result["body"])
+        self.assertEqual(body["message"], "Unexpected quotation failure.")
+        self.assertNotIn("RuntimeError", body["message"])
+        self.assertNotIn("secret internals", body["message"])
+        log_text = "\n".join(logs.output)
+        self.assertIn("correlation_id=", log_text)
+        self.assertIn("Traceback (most recent call last):", log_text)
+        self.assertIn("RuntimeError: secret internals", log_text)
+
 
 if __name__ == "__main__":
     unittest.main()

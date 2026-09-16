@@ -403,6 +403,47 @@ class ContractTests(unittest.TestCase):
         self.assertEqual([item.product_id for item in response.result], [1, 2, 3])
         self.assertEqual([item.success for item in response.result], [True, False, True])
 
+    @patch("service.quotation_orchestrator.CountryStrategyFactory.create")
+    def test_unexpected_product_error_returns_generic_message(self, create) -> None:
+        """Per-product unexpected failures do not leak exception details."""
+
+        class _BoomService(QuotationService):
+            def _quote_product(
+                self,
+                strategy,
+                product,
+                settings,
+                prefer_amazon_fulfillment=False,
+            ):
+                raise RuntimeError("secret internals")
+
+        create.return_value = _PartialStrategy()
+        request = QuotationRequestDTO.from_event(
+            {
+                "body": {
+                    "country": "GT",
+                    "products": [
+                        {
+                            "product_id": 1,
+                            "amz_weight_kg": 1,
+                            "unspsc": "123",
+                            "amz_offers": [],
+                        }
+                    ],
+                }
+            }
+        )
+
+        with self.assertLogs("service.quotation_orchestrator", level="ERROR") as logs:
+            response = _BoomService().quote(request)
+
+        self.assertEqual(response.result[0].message, "Unexpected product quotation failure.")
+        self.assertNotIn("secret internals", response.result[0].message)
+        log_text = "\n".join(logs.output)
+        self.assertIn("correlation_id=", log_text)
+        self.assertIn("Traceback (most recent call last):", log_text)
+        self.assertIn("RuntimeError: secret internals", log_text)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from collections.abc import Callable
 from functools import lru_cache
 from typing import Any
@@ -42,10 +43,15 @@ def handle_quotation_event(
         logger.warning("Quotation request rejected: %s", exc)
         return _format_response(event, _failed_response(str(exc)), 400)
     except Exception as exc:
-        logger.exception("Unexpected quotation failure.")
+        correlation_id = uuid.uuid4().hex
+        logger.exception(
+            "Unexpected quotation failure. correlation_id=%s",
+            correlation_id,
+            exc_info=exc,
+        )
         return _format_response(
             event,
-            _failed_response(_unexpected_error_message(exc)),
+            _failed_response(_unexpected_error_message()),
             500,
         )
 
@@ -122,17 +128,10 @@ def _failed_response(message: str) -> dict[str, Any]:
     return QuotationResponseDTO(success=False, message=message, result=()).to_dict()
 
 
-def _unexpected_error_message(exc: BaseException) -> str:
-    """Build a response message that includes the unexpected error.
-
-    Args:
-        exc: Exception that escaped the quotation flow.
+def _unexpected_error_message() -> str:
+    """Return the public message for an unexpected quotation failure.
 
     Returns:
-        str: Generic prefix plus exception type and detail.
+        str: Fixed generic message with no exception type or detail.
     """
-    detail = str(exc).strip()
-    name = type(exc).__name__
-    if detail:
-        return f"Unexpected quotation failure: {name}: {detail}"
-    return f"Unexpected quotation failure: {name}"
+    return "Unexpected quotation failure."
