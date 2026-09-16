@@ -182,7 +182,7 @@ class GuatemalaQuotationStrategy(CountryQuotationStrategy):
         self,
         cabys: str | None,
         settings: CountrySettingsDTO,
-    ) -> Decimal:
+    ) -> SalesIvaDTO:
         """Return the configured Guatemala sales-VAT rate.
 
         Args:
@@ -190,7 +190,7 @@ class GuatemalaQuotationStrategy(CountryQuotationStrategy):
             settings: ``default_iva_venta`` from ``oc_setting``.
 
         Returns:
-            Decimal: Sales-VAT rate used by ``calculate()``.
+            SalesIvaDTO: Sales-VAT rate used by ``calculate()``.
         """
         del cabys
         rate = settings.decimal("default_iva_venta")

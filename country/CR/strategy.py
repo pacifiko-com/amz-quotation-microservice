@@ -178,7 +178,7 @@ class CostaRicaQuotationStrategy(CountryQuotationStrategy):
         self,
         cabys: str | None,
         settings: CountrySettingsDTO,
-    ) -> Decimal:
+    ) -> SalesIvaDTO:
         """Use ``pac_cabys.tax_rate`` when assigned; otherwise the default.
 
         Args:
@@ -186,7 +186,7 @@ class CostaRicaQuotationStrategy(CountryQuotationStrategy):
             settings: Fallback ``default_iva_venta``.
 
         Returns:
-            Decimal: Sales-VAT rate used by ``calculate()``.
+            SalesIvaDTO: Sales-VAT rate used by ``calculate()``.
         """
         default_rate = settings.decimal("default_iva_venta")
         if not cabys:

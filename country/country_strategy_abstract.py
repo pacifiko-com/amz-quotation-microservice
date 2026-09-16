@@ -12,6 +12,7 @@ from DTO.quotation_context_dto import (
     SelectedOfferDTO,
     TariffDataDTO,
     UnspscDataDTO,
+    SalesIvaDTO,
 )
 
 
@@ -225,7 +226,7 @@ class CountryQuotationStrategy(ABC):
         self,
         cabys: str | None,
         settings: CountrySettingsDTO,
-    ) -> Decimal:
+    ) -> SalesIvaDTO:
         """Return the sales-VAT rate for one product classification.
 
         Args:
@@ -233,7 +234,7 @@ class CountryQuotationStrategy(ABC):
             settings: Fallback rate from ``oc_setting``.
 
         Returns:
-            Decimal: Rate applied by the country calculator.
+            SalesIvaDTO: Rate applied by the country calculator.
         """
         raise NotImplementedError
 
