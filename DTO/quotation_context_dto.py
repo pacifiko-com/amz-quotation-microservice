@@ -92,8 +92,9 @@ class CountrySettingsDTO:
         Returns:
             int: Parsed integer setting.
         """
+        value = self.require(key)
         try:
-            return int(self.require(key))
+            return int(value)
         except ValueError as exc:
             raise ValueError(f"oc_setting key {key} must be an integer.") from exc
 
