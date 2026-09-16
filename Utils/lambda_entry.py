@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from functools import lru_cache
 from typing import Any
 
-from database.connection import ensure_connection
+from database.connection import ensure_connection, warm_connections
+from database.settings_cache import warm_country_settings
 from DTO.quotation_request_dto import RequestValidationError
 from DTO.quotation_response_dto import QuotationResponseDTO
 from Utils.logger import get_logger
@@ -32,7 +34,7 @@ def handle_quotation_event(
             ``statusCode``, ``headers`` and a JSON ``body``.
     """
     try:
-        request = parse_request(event)
+        request = _prepare_and_parse(event, parse_request)
         ensure_connection(request.country)
         payload = quote(request).to_dict()
         return _format_response(event, payload, 200)
@@ -46,6 +48,30 @@ def handle_quotation_event(
             _failed_response(_unexpected_error_message(exc)),
             500,
         )
+
+
+def _prepare_and_parse(
+    event: dict[str, Any],
+    parse_request: Callable[[dict[str, Any]], Any],
+) -> Any:
+    """Warm process caches once, then validate the Lambda event.
+
+    Args:
+        event: Direct or API Gateway quotation event.
+        parse_request: Endpoint-specific request validator.
+
+    Returns:
+        Any: Parsed request DTO for the current endpoint.
+    """
+    _warm_once()
+    return parse_request(event)
+
+
+@lru_cache(maxsize=1)
+def _warm_once() -> None:
+    """Open reused connections and load country settings on first request."""
+    warm_connections()
+    warm_country_settings()
 
 
 def _format_response(

@@ -2,15 +2,9 @@
 
 from typing import Any
 
-from database.connection import warm_connections
-from database.settings_cache import warm_country_settings
 from DTO.quotation_request_dto import PriceQuotationRequestDTO
 from service.price_quotation_service import PriceQuotationService
 from Utils.lambda_entry import handle_quotation_event
-
-# Created once per execution environment and reused by warm invocations.
-warm_connections()
-warm_country_settings()
 
 
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
