@@ -6,9 +6,13 @@ import unittest
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
+from country.country_prefetched_strategy import CountryPrefetchedStrategy
+from country.CR.strategy import CostaRicaQuotationStrategy
+from country.GT.strategy import GuatemalaQuotationStrategy
 from DTO.quotation_context_dto import (
     CountrySettingsDTO,
     ProductDataDTO,
+    QuotationLookupDTO,
     TariffDataDTO,
     UnspscDataDTO,
 )
@@ -161,6 +165,75 @@ class CountryPolicyTests(unittest.TestCase):
         strategy.get_unspsc_data.assert_not_called()
         strategy.save_unknown_unspsc.assert_not_called()
         strategy.get_default_unspsc.assert_called_once()
+
+
+class PrefetchedSalesIvaTests(unittest.TestCase):
+    """Verify country resolvers consume prefetched CABYS rates."""
+
+    def _settings(self) -> CountrySettingsDTO:
+        return CountrySettingsDTO({"default_iva_venta": "0.13"})
+
+    def _lookup(self, sales_iva: dict) -> QuotationLookupDTO:
+        return QuotationLookupDTO(
+            products={},
+            unspsc={},
+            tariffs={},
+            category_courier={},
+            sales_iva=sales_iva,
+        )
+
+    def test_cr_uses_prefetched_cabys_rate_without_repository(self) -> None:
+        """CR applies the prefetch map and skips pac_cabys."""
+        repository = MagicMock()
+        strategy = CountryPrefetchedStrategy(
+            CostaRicaQuotationStrategy(repository=repository),
+            self._lookup({"1234567890123": Decimal("0.01")}),
+        )
+
+        result = strategy.resolve_sales_iva_rate("1234567890123", self._settings())
+
+        self.assertEqual(result.rate, Decimal("0.01"))
+        self.assertEqual(
+            result.quotation_notes,
+            (
+                "IVA de venta 0.01 tomado de pac_cabys para CABYS 1234567890123.",
+            ),
+        )
+        repository.get_cabys_tax_rates.assert_not_called()
+
+    def test_cr_prefetched_miss_uses_default_without_repository(self) -> None:
+        """CR missing CABYS in the prefetch map uses default_iva_venta."""
+        repository = MagicMock()
+        strategy = CountryPrefetchedStrategy(
+            CostaRicaQuotationStrategy(repository=repository),
+            self._lookup({}),
+        )
+
+        result = strategy.resolve_sales_iva_rate("1234567890123", self._settings())
+
+        self.assertEqual(result.rate, Decimal("0.13"))
+        self.assertTrue(
+            any("no encontrado en pac_cabys" in note for note in result.quotation_notes)
+        )
+        repository.get_cabys_tax_rates.assert_not_called()
+
+    def test_gt_ignores_prefetched_cabys_and_keeps_setting_notes(self) -> None:
+        """GT keeps oc_setting IVA even when a CABYS map is prefetched."""
+        repository = MagicMock()
+        strategy = CountryPrefetchedStrategy(
+            GuatemalaQuotationStrategy(repository=repository),
+            self._lookup({"1234567890123": Decimal("0.01")}),
+        )
+
+        result = strategy.resolve_sales_iva_rate("1234567890123", self._settings())
+
+        self.assertEqual(result.rate, Decimal("0.13"))
+        self.assertEqual(
+            result.quotation_notes,
+            (
+                "IVA de venta GT desde oc_setting default_iva_venta (0.13).",
+            ),
+        )
 
 
 if __name__ == "__main__":

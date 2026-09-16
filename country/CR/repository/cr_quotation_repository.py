@@ -12,6 +12,7 @@ from DTO.quotation_context_dto import (
     decimal_from_row,
 )
 from repository.base_quotation_repository import BaseQuotationRepository
+from decimal import Decimal
 
 
 class CostaRicaQuotationRepository(BaseQuotationRepository):

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from decimal import Decimal
 
@@ -183,17 +183,19 @@ class GuatemalaQuotationStrategy(CountryQuotationStrategy):
         self,
         cabys: str | None,
         settings: CountrySettingsDTO,
+        prefetched_rates: Mapping[str, Decimal] | None = None,
     ) -> SalesIvaDTO:
         """Return the configured Guatemala sales-VAT rate.
 
         Args:
             cabys: Unused in Guatemala.
             settings: ``default_iva_venta`` from ``oc_setting``.
+            prefetched_rates: Unused; Guatemala does not resolve CABYS rates.
 
         Returns:
             SalesIvaDTO: Sales-VAT rate used by ``calculate()``.
         """
-        del cabys
+        del cabys, prefetched_rates
         rate = settings.decimal("default_iva_venta")
         return SalesIvaDTO(
             rate=rate,

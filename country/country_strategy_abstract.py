@@ -1,7 +1,7 @@
 """Granular contract for country-specific quotation decisions."""
 
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from decimal import Decimal
 
 from DTO.quotation_context_dto import (
@@ -227,12 +227,15 @@ class CountryQuotationStrategy(ABC):
         self,
         cabys: str | None,
         settings: CountrySettingsDTO,
+        prefetched_rates: Mapping[str, Decimal] | None = None,
     ) -> SalesIvaDTO:
         """Return the sales-VAT rate for one product classification.
 
         Args:
             cabys: Optional country classification used for sales VAT.
             settings: Fallback rate from ``oc_setting``.
+            prefetched_rates: Optional CABYS rates loaded before the product
+                loop. ``None`` means the country Strategy should load them.
 
         Returns:
             SalesIvaDTO: Rate applied by the country calculator.

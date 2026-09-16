@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from decimal import Decimal
 
 from country.country_strategy_abstract import CountryQuotationStrategy
@@ -179,12 +179,14 @@ class CostaRicaQuotationStrategy(CountryQuotationStrategy):
         self,
         cabys: str | None,
         settings: CountrySettingsDTO,
+        prefetched_rates: Mapping[str, Decimal] | None = None,
     ) -> SalesIvaDTO:
         """Use ``pac_cabys.tax_rate`` when assigned; otherwise the default.
 
         Args:
             cabys: Product CABYS or ``None``.
             settings: Fallback ``default_iva_venta``.
+            prefetched_rates: Optional CABYS rates from the request prefetch.
 
         Returns:
             SalesIvaDTO: Sales-VAT rate used by ``calculate()``.
@@ -198,7 +200,11 @@ class CostaRicaQuotationStrategy(CountryQuotationStrategy):
                     f"default_iva_venta ({default_rate}).",
                 ),
             )
-        rates = self._repository.get_cabys_tax_rates((cabys,))
+        rates = (
+            prefetched_rates
+            if prefetched_rates is not None
+            else self._repository.get_cabys_tax_rates((cabys,))
+        )
         if cabys in rates:
             rate = rates[cabys]
             return SalesIvaDTO(

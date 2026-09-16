@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from decimal import Decimal
 
 from country.country_strategy_abstract import CountryQuotationStrategy
@@ -128,34 +128,13 @@ class CountryPrefetchedStrategy(CountryQuotationStrategy):
         self,
         cabys: str | None,
         settings: CountrySettingsDTO,
-    ) -> Decimal:
-        """Use the prefetched CABYS rate when present; otherwise delegate."""
-        default_rate = settings.decimal("default_iva_venta")
-        if not cabys:
-            return SalesIvaDTO(
-                rate=default_rate,
-                quotation_notes=(
-                    "Sin CABYS; IVA de venta desde oc_setting "
-                    f"default_iva_venta ({default_rate}).",
-                ),
-            )
-        if self._lookup is not None:
-            if cabys in self._lookup.sales_iva:
-                rate = self._lookup.sales_iva[cabys]
-                return SalesIvaDTO(
-                    rate=rate,
-                    quotation_notes=(
-                        f"IVA de venta {rate} tomado de pac_cabys para CABYS {cabys}.",
-                    ),
-                )
-            return SalesIvaDTO(
-                rate=default_rate,
-                quotation_notes=(
-                    f"CABYS {cabys} no encontrado en pac_cabys; IVA de venta "
-                    f"desde oc_setting default_iva_venta ({default_rate}).",
-                ),
-            )
-        return self._inner.resolve_sales_iva_rate(cabys, settings)
+        prefetched_rates: Mapping[str, Decimal] | None = None,
+    ) -> SalesIvaDTO:
+        """Delegate sales-VAT resolution, forwarding prefetched CABYS rates."""
+        rates = prefetched_rates
+        if rates is None and self._lookup is not None:
+            rates = self._lookup.sales_iva
+        return self._inner.resolve_sales_iva_rate(cabys, settings, rates)
 
     def load_category_tree_courier_map(
         self,
