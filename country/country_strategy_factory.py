@@ -12,6 +12,7 @@ class CountryStrategyFactory:
     """Create registered country quotation Strategies."""
 
     _builders: dict[str, StrategyBuilder] = {}
+    _defaults_registered: bool = False
 
     @classmethod
     def register(cls, country: str, builder: StrategyBuilder) -> None:
@@ -53,10 +54,11 @@ class CountryStrategyFactory:
         Returns:
             None: GT and CR builders become available.
         """
-        if cls._builders:
+        if cls._defaults_registered:
             return
         from country.CR.strategy import CostaRicaQuotationStrategy
         from country.GT.strategy import GuatemalaQuotationStrategy
 
         cls.register("GT", GuatemalaQuotationStrategy)
         cls.register("CR", CostaRicaQuotationStrategy)
+        cls._defaults_registered = True
