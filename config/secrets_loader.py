@@ -23,10 +23,10 @@ def apply_secrets_from_manager() -> None:
     global _secrets_applied
     if _secrets_applied:
         return
-    _secrets_applied = True
 
     secret_arn = (os.getenv("SECRETS_MANAGER_SECRET_ARN") or "").strip()
     if not secret_arn:
+        _secrets_applied = True
         return
 
     try:
@@ -52,8 +52,9 @@ def apply_secrets_from_manager() -> None:
             continue
         os.environ[key] = str(value)
         applied += 1
+        
     logger.info("Applied %s keys from Secrets Manager.", applied)
-
+    _secrets_applied = True
 
 def reset_secrets_loader() -> None:
     """Allow tests to run another Secrets Manager load in the same process."""
