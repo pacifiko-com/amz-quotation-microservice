@@ -427,6 +427,19 @@ security group configurados en `categories-bulk-functions`:
 con ejecución básica, acceso a la VPC y `secretsmanager:GetSecretValue`
 únicamente sobre el secreto de ese ambiente.
 
+Defaults del template (`sam/template-quotation.yaml`):
+
+| Parámetro | Default | Motivo |
+| --- | --- | --- |
+| `MemorySize` | 1024 MB | Evita sobre-provisionar memoria frente a API REST |
+| `Timeout` | 60 s | La integración REST corta al cliente ~29 s; 60 s limita facturación post-timeout |
+| `ReservedConcurrentExecutions` | 10 por función | Cada container caliente abre conexión GT y CR |
+| `ThrottleRateLimit` / `ThrottleBurstLimit` | 10 / 20 rps | Throttle real en el Usage Plan (no solo medición por API key) |
+| `LogRetentionInDays` | 30 | Retención explícita en `/aws/lambda/...` |
+
+API Gateway REST sigue limitando la respuesta al cliente a ~29 s aunque la
+Lambda tenga timeout mayor.
+
 `SecretArn` identifica el secreto de Secrets Manager. El valor debe ser un
 JSON con las keys `DB_GT_*` y `DB_CR_*` (y opcionalmente `LOG_LEVEL`,
 `OC_SETTING_CACHE_TTL_SECONDS`, `QUOTATION_WORKER_THREADS` y
