@@ -1,0 +1,1 @@
+"""Costa Rica business rules."""

@@ -1,0 +1,1 @@
+"""Shared quotation application services."""

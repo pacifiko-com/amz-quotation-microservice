@@ -1,0 +1,1 @@
+"""Guatemala quotation implementation."""

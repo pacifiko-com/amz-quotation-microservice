@@ -1,0 +1,168 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Quotation microservice. Deploy once per environment (qa or prod).
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: amz-quotation-microservice
+    Description: Prefix used for all physical AWS resource names.
+  Environment:
+    Type: String
+    AllowedValues: [qa, prod]
+    Description: Target environment. Controls function names and API path prefix.
+  SecretArn:
+    Type: String
+    Description: Secrets Manager ARN containing DB_GT_* and DB_CR_* values.
+  VpcSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Default: sg-0eb223bab8ae85751
+    Description: Security group used by the quotation Lambdas.
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet::Id
+    Default: subnet-0d4a8910e3afcfd71
+    Description: First private subnet used by the quotation Lambdas.
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet::Id
+    Default: subnet-0a200336479c88ead
+    Description: Second private subnet used by the quotation Lambdas.
+  MemorySize:
+    Type: Number
+    Default: 10240
+    MinValue: 128
+    MaxValue: 10240
+  Timeout:
+    Type: Number
+    Default: 900
+    MinValue: 1
+    MaxValue: 900
+  EphemeralStorageSize:
+    Type: Number
+    Default: 512
+    MinValue: 512
+    MaxValue: 10240
+  LogLevel:
+    Type: String
+    Default: INFO
+    AllowedValues: [DEBUG, INFO, WARNING, ERROR, CRITICAL]
+
+Globals:
+  Function:
+    Runtime: python3.12
+    MemorySize: !Ref MemorySize
+    Timeout: !Ref Timeout
+    EphemeralStorage:
+      Size: !Ref EphemeralStorageSize
+    VpcConfig:
+      SecurityGroupIds:
+        - !Ref VpcSecurityGroupId
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+    Environment:
+      Variables:
+        LOG_LEVEL: !Ref LogLevel
+        SECRETS_MANAGER_SECRET_ARN: !Ref SecretArn
+
+Resources:
+  QuotationApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub "${ProjectName}-${Environment}-api"
+      StageName: !Ref Environment
+      OpenApiVersion: "3.0.1"
+      Auth:
+        ApiKeyRequired: true
+      Tags:
+        Project: amz-quotation-microservice
+        DeploymentEnvironment: !Ref Environment
+
+  QuotationFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: python3.12
+    Properties:
+      FunctionName: !Sub "${ProjectName}-${Environment}-quotation"
+      CodeUri: ..
+      Handler: quotation_main.lambda_handler
+      Policies:
+        - Statement:
+            - Sid: ReadAppSecretAtRuntime
+              Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref SecretArn
+      Events:
+        Quotation:
+          Type: Api
+          Properties:
+            RestApiId: !Ref QuotationApi
+            Path: /quotation
+            Method: post
+            Auth:
+              ApiKeyRequired: true
+
+  PriceQuotationFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: python3.12
+    Properties:
+      FunctionName: !Sub "${ProjectName}-${Environment}-price-quotation"
+      CodeUri: ..
+      Handler: price_quotation_main.lambda_handler
+      Policies:
+        - Statement:
+            - Sid: ReadAppSecretAtRuntime
+              Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref SecretArn
+      Events:
+        PriceQuotation:
+          Type: Api
+          Properties:
+            RestApiId: !Ref QuotationApi
+            Path: /price-quotation
+            Method: post
+            Auth:
+              ApiKeyRequired: true
+
+  UsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn: QuotationApiStage
+    Properties:
+      UsagePlanName: !Sub "${ProjectName}-${Environment}-usage-plan"
+      ApiStages:
+        - ApiId: !Ref QuotationApi
+          Stage: !Ref QuotationApiStage
+
+  ApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    DependsOn: UsagePlan
+    Properties:
+      Name: !Sub "${ProjectName}-${Environment}-api-key"
+      Enabled: true
+
+  UsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref ApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref UsagePlan
+
+Outputs:
+  QuotationUrl:
+    Description: Offer-selection quotation endpoint.
+    Value: !Sub "https://${QuotationApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/quotation"
+  PriceQuotationUrl:
+    Description: Direct-price quotation endpoint.
+    Value: !Sub "https://${QuotationApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/price-quotation"
+  ApiKeyId:
+    Description: API key ID. Retrieve its value with apigateway get-api-key --include-value.
+    Value: !Ref ApiKey
+  UsagePlanId:
+    Value: !Ref UsagePlan
+  QuotationFunctionName:
+    Value: !Ref QuotationFunction
+  PriceQuotationFunctionName:
+    Value: !Ref PriceQuotationFunction

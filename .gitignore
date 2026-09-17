@@ -24,8 +24,10 @@ env/
 .coverage
 htmlcov/
 .mypy_cache/
+test-massive/output/
 
 # Packaging / Lambda artifacts
+.aws-sam/
 dist/
 build/
 *.egg-info/
@@ -36,3 +38,5 @@ build/
 Thumbs.db
 
 .serena
+
+.local/

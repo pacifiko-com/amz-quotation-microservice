@@ -1,0 +1,44 @@
+# AWS SAM CLI configuration for the quotation microservice.
+# Build from the repository root so requirements.txt is included.
+version = 0.1
+
+[default]
+[default.global.parameters]
+region = "us-east-2"
+
+[default.build.parameters]
+cached = false
+parallel = true
+template_file = "sam/template-quotation.yaml"
+
+[qa]
+[qa.global.parameters]
+region = "us-east-2"
+[qa.build.parameters]
+cached = false
+parallel = true
+template_file = "sam/template-quotation.yaml"
+[qa.deploy.parameters]
+stack_name = "amz-quotation-microservice-qa"
+region = "us-east-2"
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+template_file = ".aws-sam/build/template.yaml"
+parameter_overrides = "Environment=qa SecretArn=arn:aws:secretsmanager:us-east-2:796868798913:secret:qa-amz-quotation-microservice-Z2aIir"
+
+[prod]
+[prod.global.parameters]
+region = "us-east-2"
+[prod.build.parameters]
+cached = false
+parallel = true
+template_file = "sam/template-quotation.yaml"
+[prod.deploy.parameters]
+stack_name = "amz-quotation-microservice-prod"
+region = "us-east-2"
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+template_file = ".aws-sam/build/template.yaml"
+parameter_overrides = "Environment=prod SecretArn=arn:aws:secretsmanager:us-east-2:796868798913:secret:prod-amz-quotation-microservice-scdMfN"
