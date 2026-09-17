@@ -60,15 +60,7 @@ class QuotationOrchestrator:
 
         # Obtener los settings según país. Se cargan una sola vez por request y
         # no por producto, para no repetir la consulta a oc_setting.
-        try:
-            settings = strategy.resolve_settings()
-        except (QuotationError, ValueError) as exc:
-            # Sin constantes no se puede cotizar nada: falla todo el request.
-            return QuotationResponseDTO(
-                success=False,
-                message=str(exc),
-                result=(),
-            )
+        settings = strategy.resolve_settings()
 
         # Fetch data in a single batch query and bind it to the strategy
         # to reuse it by every product quotation.

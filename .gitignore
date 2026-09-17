@@ -38,5 +38,5 @@ build/
 Thumbs.db
 
 .serena
-
+.cursor/
 .local/

@@ -70,24 +70,29 @@ class LambdaEntryTests(unittest.TestCase):
         self.assertEqual(body["message"], "bad request")
         self.assertEqual(body["result"], [])
 
-    def test_warmup_failure_returns_structured_error(self) -> None:
-        """Warm-up errors stay inside the public success/message/result shape."""
+    def test_warmup_failure_returns_generic_server_error(self) -> None:
+        """Server-side warm-up failures return HTTP 500 without leaking details."""
         with patch(
             "Utils.lambda_entry._warm_once",
             side_effect=ValueError("missing database configuration"),
-        ):
+        ), self.assertLogs("Utils.lambda_entry", level="ERROR") as logs:
             result = handle_quotation_event(
-                {"body": {"country": "GT"}},
+                {"body": {"country": "GT"}, "requestContext": {"stage": "qa"}},
                 lambda event: MagicMock(country="GT"),
                 lambda request: QuotationResponseDTO(
                     success=True, message="ok", result=()
                 ),
             )
 
-        self.assertFalse(result["success"])
-        self.assertEqual(result["message"], "missing database configuration")
-        self.assertEqual(result["result"], [])
-        self.assertNotIn("statusCode", result)
+        self.assertEqual(result["statusCode"], 500)
+        body = json.loads(result["body"])
+        self.assertFalse(body["success"])
+        self.assertEqual(body["message"], "Unexpected quotation failure.")
+        self.assertNotIn("missing database configuration", body["message"])
+        self.assertEqual(body["result"], [])
+        log_text = "\n".join(logs.output)
+        self.assertIn("correlation_id=", log_text)
+        self.assertIn("ValueError: missing database configuration", log_text)
 
     def test_unexpected_error_returns_generic_message(self) -> None:
         """Unexpected failures do not leak exception type or detail."""
