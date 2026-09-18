@@ -5,11 +5,15 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from database.connection import get_connection
+from Utils.logger import get_logger
 from DTO.quotation_context_dto import (
     CountrySettingsDTO,
     UnspscDataDTO,
     decimal_from_row,
 )
+
+
+logger = get_logger(__name__)
 
 
 class BaseQuotationRepository:
@@ -190,11 +194,16 @@ class BaseQuotationRepository:
     def save_unknown_unspsc_many(self, codes: Sequence[str]) -> None:
         """Insert unknown UNSPSC codes in one round-trip.
 
+        Best-effort only: a failed insert must not abort quotation. The caller
+        already falls back to ``oc_setting`` defaults when the code is absent
+        from ``oc_arancel_amz``.
+
         Args:
             codes: Classifications absent from ``oc_arancel_amz``.
 
         Returns:
-            None: ``oc_category_amz_new`` contains the codes after the call.
+            None: ``oc_category_amz_new`` contains the codes when the insert
+                succeeds.
         """
         unique_codes = tuple(dict.fromkeys(code for code in codes if code))
         if not unique_codes:
@@ -203,8 +212,16 @@ class BaseQuotationRepository:
             INSERT IGNORE INTO oc_category_amz_new (category_amz)
             VALUES (%s)
         """
-        with get_connection(self.COUNTRY).cursor() as cursor:
-            cursor.executemany(sql, [(code,) for code in unique_codes])
+        try:
+            with get_connection(self.COUNTRY).cursor() as cursor:
+                cursor.executemany(sql, [(code,) for code in unique_codes])
+        except Exception as exc:
+            logger.warning(
+                "Could not record unknown UNSPSC codes for %s (%s): %s",
+                self.COUNTRY,
+                ", ".join(unique_codes),
+                exc,
+            )
 
     @staticmethod
     def _unspsc_from_row(

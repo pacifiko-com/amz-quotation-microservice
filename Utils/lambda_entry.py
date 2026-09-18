@@ -39,7 +39,7 @@ def handle_quotation_event(
         ensure_connection(request.country)
         payload = quote(request).to_dict()
         return _format_response(event, payload, 200)
-    except (RequestValidationError, ValueError) as exc:
+    except RequestValidationError as exc:
         logger.warning("Quotation request rejected: %s", exc)
         return _format_response(event, _failed_response(str(exc)), 400)
     except Exception as exc:

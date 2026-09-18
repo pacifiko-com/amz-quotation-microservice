@@ -53,7 +53,8 @@ Para cada producto, en el orden recibido:
 1. Cargar únicamente las constantes requeridas de `oc_setting`.
 2. Prefetch en batch: peso/courier/partida de `oc_product`, UNSPSC,
    partidas y, si aplica, IVA de venta. Los UNSPSC desconocidos se
-   registran aquí con `INSERT IGNORE` en `oc_category_amz_new`.
+   intentan registrar con `INSERT IGNORE` en `oc_category_amz_new`; si
+   el insert falla, la cotización sigue con defaults de `oc_setting`.
 3. Aplicar overrides del request.
 4. Resolver UNSPSC desde el mapa en memoria (sin query). Si no existe,
    usar defaults de `oc_setting`.
@@ -234,7 +235,7 @@ CR usa el mismo `resolve_policy()` que GT. Cambia el origen de los datos
 
 ## Constantes Guatemala
 
-Verificadas contra `lectura-prod-gt`. La tabla enumera todas las keys consumidas
+La tabla enumera todas las keys consumidas
 por la implementación; no incluye credenciales ni tokens.
 
 | Key | País | Uso | Estado |
@@ -372,6 +373,30 @@ Variables de entorno:
 - `SECRETS_MANAGER_SECRET_ARN` (solo en Lambda; el JSON del secreto debe
   incluir las keys `DB_GT_*` y `DB_CR_*`).
 
+### Permisos MySQL
+
+Las conexiones `DB_GT_*` y `DB_CR_*` **no deben apuntar a réplicas
+read-only**. El servicio es mayormente lectura, pero durante el prefetch
+intenta un `INSERT IGNORE` en `oc_category_amz_new` para registrar UNSPSC
+desconocidos. Si ese insert falla, la cotización continúa con defaults de
+`oc_setting` y el error queda en logs.
+
+Usuario MySQL requerido por país (misma base OpenCart del país):
+
+| Permiso | Tabla | Uso |
+| --- | --- | --- |
+| `SELECT` | `oc_setting` | Constantes de país (`global_store`) |
+| `SELECT` | `oc_arancel_amz` | Política por UNSPSC |
+| `SELECT` | `oc_product` | Peso, partida, courier y CABYS almacenados |
+| `SELECT` | `oc_partida_arancelaria` | Arancel, restricción y courier por partida |
+| `SELECT` | `oc_product_to_category`, `oc_category_path`, `oc_category` | Courier por árbol de categorías |
+| `SELECT` | `pac_cabys` | IVA de venta por CABYS (solo CR) |
+| `INSERT` | `oc_category_amz_new` (`category_amz`) | Registrar UNSPSC desconocidos |
+
+No se requieren `UPDATE`, `DELETE` ni DDL. El usuario puede ser de solo
+lectura en el resto del esquema siempre que tenga `INSERT` en
+`oc_category_amz_new`.
+
 Handler AWS: `quotation_main.lambda_handler`.
 
 ## Infraestructura AWS
@@ -401,6 +426,19 @@ security group configurados en `categories-bulk-functions`:
 `sg-0eb223bab8ae85751`. SAM crea el IAM Role de cada función (sin nombre fijo)
 con ejecución básica, acceso a la VPC y `secretsmanager:GetSecretValue`
 únicamente sobre el secreto de ese ambiente.
+
+Defaults del template (`sam/template-quotation.yaml`):
+
+| Parámetro | Default | Motivo |
+| --- | --- | --- |
+| `MemorySize` | 1024 MB | Evita sobre-provisionar memoria frente a API REST |
+| `Timeout` | 60 s | La integración REST corta al cliente ~29 s; 60 s limita facturación post-timeout |
+| `ReservedConcurrentExecutions` | 50 por función | Cada container caliente abre conexión GT y CR |
+| `ThrottleRateLimit` / `ThrottleBurstLimit` | 50 rps / burst 100 req (best effort) | `ThrottleRateLimit` es el objetivo de tasa sostenida; `ThrottleBurstLimit` es tamaño de ráfaga. |
+| `LogRetentionInDays` | 30 | Retención explícita en `/aws/lambda/...` |
+
+API Gateway REST sigue limitando la respuesta al cliente a ~29 s aunque la
+Lambda tenga timeout mayor.
 
 `SecretArn` identifica el secreto de Secrets Manager. El valor debe ser un
 JSON con las keys `DB_GT_*` y `DB_CR_*` (y opcionalmente `LOG_LEVEL`,

@@ -126,6 +126,22 @@ class CountryPolicyTests(unittest.TestCase):
         self.assertEqual(cursor.execute.call_count, 1)
         cursor.executemany.assert_called_once()
 
+    @patch("repository.base_quotation_repository.get_connection")
+    def test_unknown_unspsc_insert_failure_does_not_abort(self, connection) -> None:
+        """A failed unknown-UNSPSC insert is logged and does not raise."""
+        cursor = MagicMock()
+        cursor.executemany.side_effect = Exception("read-only transaction")
+        connection.return_value.cursor.return_value.__enter__.return_value = cursor
+
+        with self.assertLogs(
+            "repository.base_quotation_repository", level="WARNING"
+        ) as logs:
+            _TestRepository().save_unknown_unspsc("999")
+
+        self.assertTrue(
+            any("Could not record unknown UNSPSC" in line for line in logs.output)
+        )
+
     def test_null_unspsc_uses_defaults_without_recording_unknown(self) -> None:
         """A null UNSPSC applies country defaults and skips unknown inserts."""
         default = UnspscDataDTO(

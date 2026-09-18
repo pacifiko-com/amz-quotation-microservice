@@ -28,14 +28,36 @@ Parameters:
     Description: Second private subnet used by the quotation Lambdas.
   MemorySize:
     Type: Number
-    Default: 10240
+    Default: 1024
     MinValue: 128
     MaxValue: 10240
+    Description: Lambda memory in MB. Default 1 GB matches API Gateway REST latency.
   Timeout:
     Type: Number
-    Default: 900
+    Default: 60
     MinValue: 1
     MaxValue: 900
+    Description: Lambda timeout in seconds. Keep close to API Gateway REST limits.
+  ReservedConcurrentExecutions:
+    Type: Number
+    Default: 50
+    MinValue: 1
+    Description: Per-function concurrency cap to protect shared MySQL max_connections.
+  ThrottleRateLimit:
+    Type: Number
+    Default: 50
+    MinValue: 1
+    Description: Steady-state rate target (requests per second) on the API usage plan; best-effort only.
+  ThrottleBurstLimit:
+    Type: Number
+    Default: 100
+    MinValue: 1
+    Description: Burst size (request count), not an additional rps value; best-effort only.
+  LogRetentionInDays:
+    Type: Number
+    Default: 30
+    MinValue: 1
+    Description: CloudWatch log retention for both quotation Lambdas.
   EphemeralStorageSize:
     Type: Number
     Default: 512
@@ -65,6 +87,18 @@ Globals:
         SECRETS_MANAGER_SECRET_ARN: !Ref SecretArn
 
 Resources:
+  QuotationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ProjectName}-${Environment}-quotation"
+      RetentionInDays: !Ref LogRetentionInDays
+
+  PriceQuotationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ProjectName}-${Environment}-price-quotation"
+      RetentionInDays: !Ref LogRetentionInDays
+
   QuotationApi:
     Type: AWS::Serverless::Api
     Properties:
@@ -79,12 +113,14 @@ Resources:
 
   QuotationFunction:
     Type: AWS::Serverless::Function
+    DependsOn: QuotationLogGroup
     Metadata:
       BuildMethod: python3.12
     Properties:
       FunctionName: !Sub "${ProjectName}-${Environment}-quotation"
       CodeUri: ..
       Handler: quotation_main.lambda_handler
+      ReservedConcurrentExecutions: !Ref ReservedConcurrentExecutions
       Policies:
         - Statement:
             - Sid: ReadAppSecretAtRuntime
@@ -104,12 +140,14 @@ Resources:
 
   PriceQuotationFunction:
     Type: AWS::Serverless::Function
+    DependsOn: PriceQuotationLogGroup
     Metadata:
       BuildMethod: python3.12
     Properties:
       FunctionName: !Sub "${ProjectName}-${Environment}-price-quotation"
       CodeUri: ..
       Handler: price_quotation_main.lambda_handler
+      ReservedConcurrentExecutions: !Ref ReservedConcurrentExecutions
       Policies:
         - Statement:
             - Sid: ReadAppSecretAtRuntime
@@ -132,6 +170,9 @@ Resources:
     DependsOn: QuotationApiStage
     Properties:
       UsagePlanName: !Sub "${ProjectName}-${Environment}-usage-plan"
+      Throttle:
+        RateLimit: !Ref ThrottleRateLimit
+        BurstLimit: !Ref ThrottleBurstLimit
       ApiStages:
         - ApiId: !Ref QuotationApi
           Stage: !Ref QuotationApiStage
