@@ -47,12 +47,12 @@ Parameters:
     Type: Number
     Default: 50
     MinValue: 1
-    Description: Steady-state requests per second on the API usage plan.
+    Description: Steady-state rate target (requests per second) on the API usage plan; best-effort only.
   ThrottleBurstLimit:
     Type: Number
     Default: 100
     MinValue: 1
-    Description: Burst requests allowed on the API usage plan.
+    Description: Burst size (request count), not an additional rps value; best-effort only.
   LogRetentionInDays:
     Type: Number
     Default: 30

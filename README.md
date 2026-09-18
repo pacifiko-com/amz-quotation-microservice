@@ -434,7 +434,7 @@ Defaults del template (`sam/template-quotation.yaml`):
 | `MemorySize` | 1024 MB | Evita sobre-provisionar memoria frente a API REST |
 | `Timeout` | 60 s | La integración REST corta al cliente ~29 s; 60 s limita facturación post-timeout |
 | `ReservedConcurrentExecutions` | 50 por función | Cada container caliente abre conexión GT y CR |
-| `ThrottleRateLimit` / `ThrottleBurstLimit` | 50 / 100 rps | Throttle real en el Usage Plan (no solo medición por API key) |
+| `ThrottleRateLimit` / `ThrottleBurstLimit` | 50 rps / burst 100 req (best effort) | `ThrottleRateLimit` es el objetivo de tasa sostenida; `ThrottleBurstLimit` es tamaño de ráfaga. |
 | `LogRetentionInDays` | 30 | Retención explícita en `/aws/lambda/...` |
 
 API Gateway REST sigue limitando la respuesta al cliente a ~29 s aunque la
