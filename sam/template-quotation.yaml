@@ -40,17 +40,17 @@ Parameters:
     Description: Lambda timeout in seconds. Keep close to API Gateway REST limits.
   ReservedConcurrentExecutions:
     Type: Number
-    Default: 10
+    Default: 50
     MinValue: 1
     Description: Per-function concurrency cap to protect shared MySQL max_connections.
   ThrottleRateLimit:
     Type: Number
-    Default: 10
+    Default: 50
     MinValue: 1
     Description: Steady-state requests per second on the API usage plan.
   ThrottleBurstLimit:
     Type: Number
-    Default: 20
+    Default: 100
     MinValue: 1
     Description: Burst requests allowed on the API usage plan.
   LogRetentionInDays:
