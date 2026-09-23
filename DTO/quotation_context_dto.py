@@ -168,6 +168,7 @@ class SelectedOfferDTO:
     buying_guidance: str = ""
     buying_guidance_title: str = ""
     buying_guidance_type: str = ""
+    max_quantity: int | None = None
     selection_reason: str = ""
     quotation_notes: tuple[str, ...] = ()
 

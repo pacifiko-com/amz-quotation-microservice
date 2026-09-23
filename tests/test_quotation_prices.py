@@ -15,6 +15,7 @@ from DTO.quotation_context_dto import (
 )
 from DTO.quotation_request_dto import PriceQuotationProductDTO, ProductQuotationDTO
 from DTO.quotation_response_dto import ResultObjectDTO
+from service.offer_selector import resolve_quotation_quantity
 from service.price_quotation_service import PriceQuotationService
 from service.quotation_service import QuotationService
 
@@ -53,6 +54,45 @@ class QuotationPriceTests(unittest.TestCase):
             danger_good_active=False,
             partida=None,
             sales_iva_rate=Decimal("0.12"),
+        )
+
+    def test_resolve_quantity_uses_default_without_offer_limit(self) -> None:
+        """Missing maxQuantity keeps quantity_default_tm."""
+        settings = CountrySettingsDTO({"quantity_default_tm": "5"})
+        offer = self._offer(price=Decimal("100"), list_price=None)
+
+        quantity, note = resolve_quotation_quantity(settings, offer)
+
+        self.assertEqual(quantity, 5)
+        self.assertEqual(
+            note,
+            "Cantidad 5 desde quantity_default_tm; oferta sin maxQuantity.",
+        )
+
+    def test_resolve_quantity_caps_by_offer_max(self) -> None:
+        """Default quantity is capped by the selected offer limit."""
+        settings = CountrySettingsDTO({"quantity_default_tm": "5"})
+        offer = self._offer(price=Decimal("100"), list_price=None, max_quantity=3)
+
+        quantity, note = resolve_quotation_quantity(settings, offer)
+
+        self.assertEqual(quantity, 3)
+        self.assertEqual(
+            note,
+            "Cantidad 3 de offer.maxQuantity; Es menor a quantity_default_tm 5.",
+        )
+
+    def test_resolve_quantity_keeps_default_when_offer_max_is_higher(self) -> None:
+        """A higher offer maxQuantity does not raise the default."""
+        settings = CountrySettingsDTO({"quantity_default_tm": "5"})
+        offer = self._offer(price=Decimal("100"), list_price=None, max_quantity=30)
+
+        quantity, note = resolve_quotation_quantity(settings, offer)
+
+        self.assertEqual(quantity, 5)
+        self.assertEqual(
+            note,
+            "Cantidad 5 desde quantity_default_tm; offer.maxQuantity 30 no reduce el default.",
         )
 
     def test_special_uses_local_prices_and_keeps_offer_cost(self) -> None:
@@ -218,6 +258,7 @@ class QuotationPriceTests(unittest.TestCase):
         self.assertIsNone(result.special_price_without_tax_local)
         self.assertEqual(result.offer_id, "")
         self.assertIsNone(result.delivery_promise_amz)
+        self.assertIsNone(result.quantity)
         strategy.resolve_delivery_promise.assert_not_called()
         strategy.calculate.assert_called_once()
 
@@ -247,6 +288,7 @@ class QuotationPriceTests(unittest.TestCase):
             restriction=0,
             partida="0012",
             cabys="1234567890123",
+            quantity=3,
         ).to_dict()
 
         self.assertEqual(
@@ -273,10 +315,18 @@ class QuotationPriceTests(unittest.TestCase):
                 "restriction",
                 "partida",
                 "cabys",
+                "quantity",
                 "quotation_notes",
                 "success",
                 "Message",
             ],
+        )
+        self.assertIsNone(
+            ResultObjectDTO(
+                success=True,
+                message="ok",
+                product_id=10,
+            ).to_dict()["quantity"]
         )
         self.assertIsNone(
             ResultObjectDTO(
@@ -291,6 +341,7 @@ class QuotationPriceTests(unittest.TestCase):
         price: Decimal,
         list_price: Decimal | None,
         guidance: str = "",
+        max_quantity: int | None = None,
     ) -> SelectedOfferDTO:
         """Build a normalized offer for price-resolution tests."""
         return SelectedOfferDTO(
@@ -303,6 +354,7 @@ class QuotationPriceTests(unittest.TestCase):
             delivery_information="",
             delivery_range_max=None,
             buying_guidance=guidance,
+            max_quantity=max_quantity,
         )
 
 

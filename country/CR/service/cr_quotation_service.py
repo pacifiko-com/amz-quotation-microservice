@@ -83,6 +83,7 @@ CR_SETTING_KEYS = (
     "promise_tier_2_value",
     "promise_tier_3_value",
     "promise_fallback_tier",
+    "quantity_default_tm",
 )
 
 

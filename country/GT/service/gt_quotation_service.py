@@ -68,6 +68,7 @@ GT_SETTING_KEYS = (
     "courier_seguro_flete",
     "poliza_seguro_aduanas",
     "poliza_seguro_flete",
+    "quantity_default_tm",
 )
 
 

@@ -47,6 +47,7 @@ class ResultObjectDTO:
         restriction: Resolved import restriction.
         partida: Resolved tariff code, when available.
         cabys: Resolved CABYS code, when available.
+        quantity: Purchasable quantity on successful quotation; ``None`` otherwise.
         quotation_notes: Decision trail accumulated before success or failure.
     """
 
@@ -73,6 +74,7 @@ class ResultObjectDTO:
     restriction: int | None = None
     partida: str | None = None
     cabys: str | None = None
+    quantity: int | None = None
     quotation_notes: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
@@ -108,6 +110,7 @@ class ResultObjectDTO:
             "restriction": self.restriction,
             "partida": self.partida,
             "cabys": self.cabys,
+            "quantity": self.quantity,
             "quotation_notes": list(self.quotation_notes),
             "success": self.success,
             "Message": self.message,

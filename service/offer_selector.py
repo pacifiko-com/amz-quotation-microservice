@@ -125,6 +125,9 @@ class OfferSelector:
             or selected.get("id")
             or ""
         )
+        max_quantity = OfferSelector._optional_int(
+            _nested(selected, "quantityLimits", "maxQuantity")
+        )
         notes.append(f"Oferta {offer_id or '(sin id)'} seleccionada ({selection_reason}).")
         return SelectedOfferDTO(
             offer_id=offer_id,
@@ -144,6 +147,7 @@ class OfferSelector:
             buying_guidance_type=str(
                 _nested(selected, "buyingGuidanceV2", "buyingGuidance", 0, "type") or ""
             ),
+            max_quantity=max_quantity,
             selection_reason=selection_reason,
             quotation_notes=tuple(notes),
         )
@@ -309,6 +313,57 @@ class OfferSelector:
         except (InvalidOperation, ValueError):
             return None
         return parsed if parsed.is_finite() else None
+
+    @staticmethod
+    def _optional_int(value: Any) -> int | None:
+        """Parse an optional positive integer.
+
+        Args:
+            value: Raw integer or ``None``.
+
+        Returns:
+            int | None: Parsed integer when valid.
+        """
+        if value is None or isinstance(value, bool):
+            return None
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return None
+        return parsed if parsed >= 0 else None
+
+
+def resolve_quotation_quantity(
+    settings: CountrySettingsDTO,
+    offer: SelectedOfferDTO,
+) -> tuple[int, str]:
+    """
+    Return purchasable quantity and a note describing the decision.
+
+    Args:
+        settings: Country settings.
+        offer: Selected Amazon offer.
+
+    Returns:
+        tuple[int, str]: Purchasable quantity and a note describing the decision.
+    """
+    default_quantity = settings.integer("quantity_default_tm")
+    if offer.max_quantity is None:
+        return (
+            default_quantity,
+            f"Cantidad {default_quantity} desde quantity_default_tm; oferta sin maxQuantity.",
+        )
+
+    if offer.max_quantity < default_quantity:
+        return (
+            offer.max_quantity,
+            f"Cantidad {offer.max_quantity} de offer.maxQuantity; Es menor a quantity_default_tm {default_quantity}."
+        )
+
+    return (
+        default_quantity,
+        f"Cantidad {default_quantity} desde quantity_default_tm; offer.maxQuantity {offer.max_quantity} no reduce el default.",
+    )
 
 
 def _nested(value: Any, *path: str | int) -> Any:

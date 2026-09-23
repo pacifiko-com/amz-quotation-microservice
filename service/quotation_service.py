@@ -156,6 +156,7 @@ class QuotationService:
             special_price_without_tax_local=prices.special_price_without_tax_local,
             offer_id=offer.offer_id,
             delivery_promise_amz=promise.tier,
+            selected_offer=offer,
             quotation_notes=notes,
         )
 

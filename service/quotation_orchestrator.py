@@ -17,6 +17,7 @@ from DTO.quotation_context_dto import (
     ProductDataDTO,
     QuotationLookupDTO,
     ResolvedPolicyDTO,
+    SelectedOfferDTO,
     TariffDataDTO,
     UnspscDataDTO,
 )
@@ -24,6 +25,7 @@ from config.settings import get_settings, quote_worker_count
 from const import KG_TO_LB
 from DTO.quotation_request_dto import ProductFactsDTO
 from DTO.quotation_response_dto import QuotationResponseDTO, ResultObjectDTO
+from service.offer_selector import resolve_quotation_quantity
 from Utils.exceptions import QuotationError
 from Utils.logger import get_logger
 
@@ -614,6 +616,7 @@ class QuotationOrchestrator:
         special_price_without_tax_local: Decimal | None = None,
         offer_id: str = "",
         delivery_promise_amz: int | None = None,
+        selected_offer: SelectedOfferDTO | None = None,
         quotation_notes: Sequence[str] | None = None,
     ) -> ResultObjectDTO:
         """Build a successful priced result with the shared response fields.
@@ -640,16 +643,24 @@ class QuotationOrchestrator:
                 currency before sales VAT, or ``None``.
             offer_id: Selected Amazon offer identifier when applicable.
             delivery_promise_amz: Country promise tier when an offer exists.
+            selected_offer: Selected Amazon offer used to resolve quantity.
             quotation_notes: Extra decisions after policy resolution.
 
         Returns:
             ResultObjectDTO: Successful product quotation.
         """
-        notes = (
-            tuple(quotation_notes)
+        notes = list(
+            quotation_notes
             if quotation_notes is not None
             else policy.quotation_notes
         )
+        quantity = None
+        if selected_offer is not None:
+            quantity, quantity_note = resolve_quotation_quantity(
+                settings,
+                selected_offer,
+            )
+            notes.append(quantity_note)
         return ResultObjectDTO(
             success=True,
             message="Product quoted successfully.",
@@ -674,7 +685,8 @@ class QuotationOrchestrator:
             restriction=policy.restriction,
             partida=policy.partida,
             cabys=policy.cabys,
-            quotation_notes=notes,
+            quantity=quantity,
+            quotation_notes=tuple(notes),
         )
 
 
