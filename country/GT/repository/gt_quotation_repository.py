@@ -19,16 +19,19 @@ class GuatemalaQuotationRepository(BaseQuotationRepository):
 
     COUNTRY = "GT"
 
-    def get_product(self, product_id: int) -> ProductDataDTO:
+    def get_product(self, product_id: int | None) -> ProductDataDTO:
         """Load Pacifiko values that request overrides may replace.
 
         Args:
-            product_id: Pacifiko product identifier.
+            product_id: Pacifiko product identifier, or ``None`` when the
+                product is not stored in ``oc_product``.
 
         Returns:
             ProductDataDTO: Weight, courier and SAC code. Missing products
                 produce an empty DTO so request overrides can still be used.
         """
+        if product_id is None:
+            return EMPTY_PRODUCT_DATA
         return self.get_products((product_id,)).get(product_id, EMPTY_PRODUCT_DATA)
 
     def get_products(self, product_ids: Sequence[int]) -> dict[int, ProductDataDTO]:
@@ -40,7 +43,11 @@ class GuatemalaQuotationRepository(BaseQuotationRepository):
         Returns:
             dict[int, ProductDataDTO]: Product data keyed by identifier.
         """
-        unique_ids = tuple(dict.fromkeys(product_ids))
+        unique_ids = tuple(
+            dict.fromkeys(
+                product_id for product_id in product_ids if product_id is not None
+            )
+        )
         if not unique_ids:
             return {}
 

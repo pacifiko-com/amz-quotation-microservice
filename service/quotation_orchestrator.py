@@ -140,7 +140,11 @@ class QuotationOrchestrator:
             QuotationLookupDTO: In-memory maps reused by every product.
         """
         products_map = strategy.load_products(
-            tuple(item.product_id for item in products)
+            tuple(
+                item.product_id
+                for item in products
+                if item.product_id is not None
+            )
         )
         # None unspsc requires using the default policy. Avoid saving it in unknown codes table.
         unspsc_map = strategy.load_unspsc_map(
@@ -178,7 +182,10 @@ class QuotationOrchestrator:
             )
             partida = item.pac_product_partida or stored.partida
             tariff = tariffs.get(partida) if partida else None
-            if self.needs_category_tree(item, stored, unspsc_data, tariff):
+            if (
+                item.product_id is not None
+                and self.needs_category_tree(item, stored, unspsc_data, tariff)
+            ):
                 need_category.append(item.product_id)
 
         return QuotationLookupDTO(
@@ -287,6 +294,11 @@ class QuotationOrchestrator:
         # 1. Datos base: lo guardado en oc_product y la política del UNSPSC.
         notes: list[str] = []
         product_data = strategy.get_product_data(product.product_id)
+        if product.product_id is None:
+            notes.append(
+                "product_id es null; equivalente a producto inexistente en "
+                "oc_product. Solo se usan overrides del request y otras fuentes."
+            )
         if product.unspsc is None:
             unspsc_data = strategy.get_default_unspsc(settings)
             notes.append(
@@ -429,11 +441,18 @@ class QuotationOrchestrator:
         elif not courier:
             # Sin partida, el árbol de categorías es el último recurso para
             # determinar si el producto debe ir por courier.
-            courier = strategy.get_category_tree_courier(product.product_id)
-            notes.append(
-                "Sin partida y courier aún apagado; courier del árbol de "
-                f"categorías: {courier}."
-            )
+            if product.product_id is None:
+                courier = False
+                notes.append(
+                    "Sin partida y product_id null; no se consulta el árbol de "
+                    "categorías."
+                )
+            else:
+                courier = strategy.get_category_tree_courier(product.product_id)
+                notes.append(
+                    "Sin partida y courier aún apagado; courier del árbol de "
+                    f"categorías: {courier}."
+                )
         else:
             notes.append(
                 "Sin partida; courier ya activo, no se consulta el árbol de "
@@ -472,7 +491,7 @@ class QuotationOrchestrator:
 
     @staticmethod
     def validate_policy(
-        product_id: int,
+        product_id: int | None,
         policy: ResolvedPolicyDTO,
         settings: CountrySettingsDTO,
     ) -> ResultObjectDTO | None:
@@ -508,7 +527,7 @@ class QuotationOrchestrator:
 
     @staticmethod
     def failed_result(
-        product_id: int,
+        product_id: int | None,
         message: str,
         *,
         policy: ResolvedPolicyDTO | None = None,
@@ -578,7 +597,7 @@ class QuotationOrchestrator:
 
     @staticmethod
     def priced_success(
-        product_id: int,
+        product_id: int | None,
         policy: ResolvedPolicyDTO,
         settings: CountrySettingsDTO,
         exchange_rate: Decimal,

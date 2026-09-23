@@ -19,7 +19,8 @@ class ProductFactsDTO:
     """Shared Amazon and Pacifiko fields used to resolve import policy.
 
     Attributes:
-        product_id: Pacifiko product identifier.
+        product_id: Pacifiko product identifier, or ``None`` when the
+            product is not yet stored in ``oc_product``.
         amz_weight_kg: Amazon item weight in kilograms after converting
             ``amz_weight_kg``, ``amz_weight_lb`` or ``amz_weight_oz``.
         unspsc: UNSPSC code used to resolve import policy, or ``None``
@@ -30,7 +31,7 @@ class ProductFactsDTO:
             so leading zeros are preserved.
     """
 
-    product_id: int
+    product_id: int | None
     amz_weight_kg: Decimal
     unspsc: str | None
     pac_product_weight: Decimal | None = None
@@ -222,9 +223,14 @@ def _product_facts_fields(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise RequestValidationError("Each product must be an object.")
 
-    product_id = payload.get("product_id")
-    if not isinstance(product_id, int) or isinstance(product_id, bool):
-        raise RequestValidationError("product_id must be an integer.")
+    if "product_id" not in payload:
+        raise RequestValidationError("product_id is required.")
+
+    product_id = payload["product_id"]
+    if product_id is not None and (
+        not isinstance(product_id, int) or isinstance(product_id, bool)
+    ):
+        raise RequestValidationError("product_id must be an integer or null.")
 
     unspsc = _optional_unspsc(payload.get("unspsc"))
 

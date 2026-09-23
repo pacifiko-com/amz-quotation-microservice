@@ -101,11 +101,12 @@ class CostaRicaQuotationStrategy(CountryQuotationStrategy):
         """
         return self._repository.get_default_unspsc(settings)
 
-    def get_product_data(self, product_id: int) -> ProductDataDTO:
+    def get_product_data(self, product_id: int | None) -> ProductDataDTO:
         """Load CR product weight, courier and tariff code.
 
         Args:
-            product_id: Pacifiko product identifier.
+            product_id: Pacifiko product identifier, or ``None`` when the
+                product is not stored in ``oc_product``.
 
         Returns:
             ProductDataDTO: Product data used when no override is supplied.
@@ -287,11 +288,12 @@ class CostaRicaQuotationStrategy(CountryQuotationStrategy):
             quotation_notes=tuple(notes),
         )
 
-    def get_category_tree_courier(self, product_id: int) -> bool:
+    def get_category_tree_courier(self, product_id: int | None) -> bool:
         """Resolve CR courier from the product category tree.
 
         Args:
-            product_id: Pacifiko product identifier.
+            product_id: Pacifiko product identifier, or ``None`` when the
+                product is not stored in ``oc_product``.
 
         Returns:
             bool: Deepest applicable category courier flag.

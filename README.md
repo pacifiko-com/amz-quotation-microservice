@@ -121,7 +121,13 @@ Reglas de forma:
   oferta elegible `AMAZON_FULFILLMENT` (detail page / variantes GT). Si es
   `false` o se omite, esa pasada no corre (cotizador GT).
 - `products`: arreglo no vacío.
-- `product_id`: entero requerido.
+- `product_id`: requerido; entero o `null` explícito. Omitir el campo es
+  inválido. Cuando el valor es `null`, equivale a un producto que
+  aún no existe en `oc_product`: no se consultan peso, courier, partida,
+  CABYS ni árbol de categorías desde Pacifiko, pero sí aplican el peso
+  Amazon, UNSPSC, overrides del request (`pac_product_*`) y el resto de
+  fuentes según corresponda. Útil para cotizar productos nuevos antes de
+  crearlos en catálogo.
 - Peso Amazon: exactamente uno de `amz_weight_kg`, `amz_weight_lb` o
   `amz_weight_oz` (número no negativo). Si hay más de uno no nulo, la
   petición es inválida. Libras se convierten a kg dividiendo entre

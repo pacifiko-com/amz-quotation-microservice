@@ -109,6 +109,85 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(request.products[0].pac_product_partida, "0012")
         self.assertFalse(request.prefer_amazon_fulfillment)
 
+    def test_request_accepts_null_product_id(self) -> None:
+        """New products may send an explicit null Pacifiko catalog identifier."""
+        request = QuotationRequestDTO.from_event(
+            {
+                "body": {
+                    "country": "GT",
+                    "products": [
+                        {
+                            "product_id": None,
+                            "amz_weight_kg": 1,
+                            "unspsc": "123",
+                            "amz_offers": [],
+                        }
+                    ],
+                }
+            }
+        )
+
+        self.assertIsNone(request.products[0].product_id)
+
+    def test_price_request_accepts_null_product_id(self) -> None:
+        """Direct-price requests also accept a null product_id."""
+        request = PriceQuotationRequestDTO.from_event(
+            {
+                "body": {
+                    "country": "GT",
+                    "products": [
+                        {
+                            "product_id": None,
+                            "amz_weight_kg": 1,
+                            "unspsc": "123",
+                            "amazon_price_usd": 10,
+                        }
+                    ],
+                }
+            }
+        )
+
+        self.assertIsNone(request.products[0].product_id)
+
+    def test_request_rejects_non_integer_product_id(self) -> None:
+        """product_id must be an integer or null."""
+        with self.assertRaisesRegex(
+            RequestValidationError, "product_id must be an integer or null"
+        ):
+            QuotationRequestDTO.from_event(
+                {
+                    "body": {
+                        "country": "GT",
+                        "products": [
+                            {
+                                "product_id": "123",
+                                "amz_weight_kg": 1,
+                                "unspsc": "123",
+                                "amz_offers": [],
+                            }
+                        ],
+                    }
+                }
+            )
+
+    def test_request_rejects_missing_product_id(self) -> None:
+        """Omitting product_id is invalid even when null is allowed."""
+        with self.assertRaisesRegex(RequestValidationError, "product_id is required"):
+            QuotationRequestDTO.from_event(
+                {
+                    "body": {
+                        "country": "GT",
+                        "products": [
+                            {
+                                "amz_weight_kg": 1,
+                                "unspsc": "123",
+                                "amz_offers": [],
+                            }
+                        ],
+                    }
+                }
+            )
+
     def test_request_reads_prefer_amazon_fulfillment(self) -> None:
         """The optional AF-first flag is accepted at request level."""
         request = QuotationRequestDTO.from_event(

@@ -128,15 +128,18 @@ class BaseQuotationRepository:
             courier=settings.boolean("default_courier"),
         )
 
-    def get_category_tree_courier(self, product_id: int) -> bool:
+    def get_category_tree_courier(self, product_id: int | None) -> bool:
         """Resolve courier from the deepest flagged product category.
 
         Args:
-            product_id: Pacifiko product identifier.
+            product_id: Pacifiko product identifier, or ``None`` when the
+                product is not stored in ``oc_product``.
 
         Returns:
             bool: True when the product category tree contains a courier flag.
         """
+        if product_id is None:
+            return False
         return self.get_category_tree_courier_map((product_id,)).get(product_id, False)
 
     def get_category_tree_courier_map(
@@ -151,7 +154,11 @@ class BaseQuotationRepository:
         Returns:
             dict[int, bool]: Deepest courier flag keyed by product identifier.
         """
-        unique_ids = tuple(dict.fromkeys(product_ids))
+        unique_ids = tuple(
+            dict.fromkeys(
+                product_id for product_id in product_ids if product_id is not None
+            )
+        )
         result = {product_id: False for product_id in unique_ids}
         if not unique_ids:
             return result

@@ -14,7 +14,8 @@ class ResultObjectDTO:
     Attributes:
         success: Whether this product was quoted successfully.
         message: Product-level response exposed as ``Message``.
-        product_id: Pacifiko product identifier from the request.
+        product_id: Pacifiko product identifier from the request, or
+            ``None`` when the input product is not stored in ``oc_product``.
         offer_id: Identifier of the selected Amazon offer.
         amazon_price: Public Amazon USD amount. List price when a special
             qualifies; otherwise the selected offer.
@@ -51,7 +52,7 @@ class ResultObjectDTO:
 
     success: bool
     message: str
-    product_id: int
+    product_id: int | None
     offer_id: str = ""
     amazon_price: Decimal | None = None
     special_amazon_price: Decimal | None = None

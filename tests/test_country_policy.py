@@ -183,6 +183,88 @@ class CountryPolicyTests(unittest.TestCase):
         strategy.save_unknown_unspsc.assert_not_called()
         strategy.get_default_unspsc.assert_called_once()
 
+    def test_null_product_id_skips_oc_product_and_category_tree(self) -> None:
+        """A null product_id uses other sources without querying oc_product."""
+        default = UnspscDataDTO(
+            arancel_percentage=Decimal("0.25"),
+            restriction=0,
+            category_code=0,
+            margin_percentage=Decimal("1.2"),
+            danger_good_active=False,
+            courier=True,
+        )
+        strategy = MagicMock()
+        strategy.get_product_data.return_value = ProductDataDTO(
+            weight_lb=Decimal("99"),
+            courier=True,
+            partida="stored",
+        )
+        strategy.get_unspsc_data.return_value = default
+        strategy.resolve_tariff_data.return_value = None
+        strategy.get_category_tree_courier.return_value = True
+        strategy.resolve_sales_iva_rate.return_value = Decimal("0.13")
+        product = ProductQuotationDTO(
+            product_id=None,
+            amz_weight_kg=Decimal("1"),
+            unspsc="123",
+            amz_offers=(),
+            pac_product_partida="0012",
+            pac_product_courier=False,
+            pac_product_weight=Decimal("2"),
+        )
+
+        policy = QuotationOrchestrator().resolve_policy(
+            strategy,
+            product,
+            CountrySettingsDTO({"margen": "1.2"}),
+        )
+
+        strategy.get_product_data.assert_called_once_with(None)
+        strategy.get_category_tree_courier.assert_not_called()
+        self.assertEqual(policy.partida, "0012")
+        self.assertTrue(policy.courier)
+        self.assertTrue(
+            any("product_id es null" in note for note in policy.quotation_notes)
+        )
+        self.assertTrue(
+            any(
+                "override del request" in note
+                for note in policy.quotation_notes
+            )
+        )
+
+    def test_prefetch_skips_null_product_id_queries(self) -> None:
+        """Prefetch does not load oc_product rows for null product_id values."""
+        unspsc_data = UnspscDataDTO(
+            arancel_percentage=Decimal("0.25"),
+            restriction=0,
+            category_code=0,
+            margin_percentage=Decimal("1.2"),
+            danger_good_active=False,
+            courier=False,
+        )
+        strategy = MagicMock()
+        strategy.load_products.return_value = {}
+        strategy.load_unspsc_map.return_value = {"123": unspsc_data}
+        strategy.load_tariffs.return_value = {}
+        strategy.load_sales_iva_map.return_value = {}
+        products = (
+            ProductQuotationDTO(
+                product_id=None,
+                amz_weight_kg=Decimal("1"),
+                unspsc="123",
+                amz_offers=(),
+            ),
+        )
+        settings = CountrySettingsDTO({"margen": "1.2"})
+
+        lookup = QuotationOrchestrator().prefetch(strategy, products, settings)
+
+        strategy.load_products.assert_called_once_with(())
+        strategy.load_category_tree_courier_map.assert_not_called()
+        self.assertEqual(lookup.products, {})
+        self.assertEqual(lookup.category_courier, {})
+
     def test_weight_limit_is_compared_in_kilograms(self) -> None:
         """The max weight setting is kilograms, not the stored pound value."""
         settings = CountrySettingsDTO({"max_product_weight_kg": "10"})

@@ -75,8 +75,10 @@ class CountryPrefetchedStrategy(CountryQuotationStrategy):
         """Delegate default UNSPSC construction to the country Strategy."""
         return self._inner.get_default_unspsc(settings)
 
-    def get_product_data(self, product_id: int) -> ProductDataDTO:
+    def get_product_data(self, product_id: int | None) -> ProductDataDTO:
         """Return the prefetched product row or ask the country Strategy."""
+        if product_id is None:
+            return EMPTY_PRODUCT_DATA
         if self._lookup is not None:
             return self._lookup.products.get(product_id, EMPTY_PRODUCT_DATA)
         return self._inner.get_product_data(product_id)
@@ -89,8 +91,10 @@ class CountryPrefetchedStrategy(CountryQuotationStrategy):
             return self._lookup.tariffs.get(partida)
         return self._inner.resolve_tariff_data(partida)
 
-    def get_category_tree_courier(self, product_id: int) -> bool:
+    def get_category_tree_courier(self, product_id: int | None) -> bool:
         """Return the prefetched category-tree flag or ask the country Strategy."""
+        if product_id is None:
+            return False
         if self._lookup is not None:
             return self._lookup.category_courier.get(product_id, False)
         return self._inner.get_category_tree_courier(product_id)

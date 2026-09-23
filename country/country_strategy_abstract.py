@@ -80,11 +80,12 @@ class CountryQuotationStrategy(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_product_data(self, product_id: int) -> ProductDataDTO:
+    def get_product_data(self, product_id: int | None) -> ProductDataDTO:
         """Return product weight, courier and tariff code.
 
         Args:
-            product_id: Pacifiko product identifier.
+            product_id: Pacifiko product identifier, or ``None`` when the
+                product is not stored in ``oc_product``.
 
         Returns:
             ProductDataDTO: Country-schema product projection.
@@ -104,11 +105,12 @@ class CountryQuotationStrategy(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_category_tree_courier(self, product_id: int) -> bool:
+    def get_category_tree_courier(self, product_id: int | None) -> bool:
         """Resolve courier from the deepest applicable category.
 
         Args:
-            product_id: Pacifiko product identifier.
+            product_id: Pacifiko product identifier, or ``None`` when the
+                product is not stored in ``oc_product``.
 
         Returns:
             bool: Whether the category tree requires courier.
