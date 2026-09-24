@@ -333,6 +333,16 @@ class OfferSelector:
         return parsed if parsed >= 0 else None
 
 
+def resolve_courier_max_quantity(
+    settings: CountrySettingsDTO,
+    courier: bool,
+) -> int | None:
+    """Return the courier cap from settings when the product is courier."""
+    if not courier:
+        return None
+    return settings.integer("courier_quantity_max")
+
+
 def resolve_quotation_quantity(
     settings: CountrySettingsDTO,
     offer: SelectedOfferDTO,

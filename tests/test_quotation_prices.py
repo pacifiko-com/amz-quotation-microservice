@@ -15,7 +15,10 @@ from DTO.quotation_context_dto import (
 )
 from DTO.quotation_request_dto import PriceQuotationProductDTO, ProductQuotationDTO
 from DTO.quotation_response_dto import ResultObjectDTO
-from service.offer_selector import resolve_quotation_quantity
+from service.offer_selector import (
+    resolve_courier_max_quantity,
+    resolve_quotation_quantity,
+)
 from service.price_quotation_service import PriceQuotationService
 from service.quotation_service import QuotationService
 
@@ -94,6 +97,16 @@ class QuotationPriceTests(unittest.TestCase):
             note,
             "Cantidad 5 desde quantity_default_tm; offer.maxQuantity 30 no reduce el default.",
         )
+
+    def test_resolve_courier_max_quantity_uses_setting_when_courier(self) -> None:
+        """Courier products expose courier_quantity_max from oc_setting."""
+        settings = CountrySettingsDTO({"courier_quantity_max": "12"})
+        self.assertEqual(resolve_courier_max_quantity(settings, True), 12)
+
+    def test_resolve_courier_max_quantity_is_null_when_not_courier(self) -> None:
+        """Non-courier products do not expose a courier cap."""
+        settings = CountrySettingsDTO({"courier_quantity_max": "12"})
+        self.assertIsNone(resolve_courier_max_quantity(settings, False))
 
     def test_special_uses_local_prices_and_keeps_offer_cost(self) -> None:
         """A qualifying local discount publishes list as price and offer as special."""
@@ -259,6 +272,7 @@ class QuotationPriceTests(unittest.TestCase):
         self.assertEqual(result.offer_id, "")
         self.assertIsNone(result.delivery_promise_amz)
         self.assertIsNone(result.quantity)
+        self.assertIsNone(result.max_quantity)
         strategy.resolve_delivery_promise.assert_not_called()
         strategy.calculate.assert_called_once()
 
@@ -289,6 +303,7 @@ class QuotationPriceTests(unittest.TestCase):
             partida="0012",
             cabys="1234567890123",
             quantity=3,
+            max_quantity=12,
         ).to_dict()
 
         self.assertEqual(
@@ -316,6 +331,7 @@ class QuotationPriceTests(unittest.TestCase):
                 "partida",
                 "cabys",
                 "quantity",
+                "max_quantity",
                 "quotation_notes",
                 "success",
                 "Message",
@@ -327,6 +343,13 @@ class QuotationPriceTests(unittest.TestCase):
                 message="ok",
                 product_id=10,
             ).to_dict()["quantity"]
+        )
+        self.assertIsNone(
+            ResultObjectDTO(
+                success=True,
+                message="ok",
+                product_id=10,
+            ).to_dict()["max_quantity"]
         )
         self.assertIsNone(
             ResultObjectDTO(

@@ -25,7 +25,10 @@ from config.settings import get_settings, quote_worker_count
 from const import KG_TO_LB
 from DTO.quotation_request_dto import ProductFactsDTO
 from DTO.quotation_response_dto import QuotationResponseDTO, ResultObjectDTO
-from service.offer_selector import resolve_quotation_quantity
+from service.offer_selector import (
+    resolve_courier_max_quantity,
+    resolve_quotation_quantity,
+)
 from Utils.exceptions import QuotationError
 from Utils.logger import get_logger
 
@@ -655,12 +658,14 @@ class QuotationOrchestrator:
             else policy.quotation_notes
         )
         quantity = None
+        max_quantity = None
         if selected_offer is not None:
             quantity, quantity_note = resolve_quotation_quantity(
                 settings,
                 selected_offer,
             )
             notes.append(quantity_note)
+            max_quantity = resolve_courier_max_quantity(settings, policy.courier)
         return ResultObjectDTO(
             success=True,
             message="Product quoted successfully.",
@@ -686,6 +691,7 @@ class QuotationOrchestrator:
             partida=policy.partida,
             cabys=policy.cabys,
             quantity=quantity,
+            max_quantity=max_quantity,
             quotation_notes=tuple(notes),
         )
 
